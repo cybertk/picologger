@@ -54,9 +54,21 @@ class LogServer(threading.Thread):
 
             print('get %s bytes form' % len(data), addr)
 
-            buf = struct.unpack('>III%ds' % (len(data) - 12), data)
+            while data:
+                buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
 
-            clients.wfile.write(buf)
+                sec = buf[0]
+                usec = buf[1]
+                level = buf[2]
+                sz = buf[3]
+
+                print(sec, usec, level, sz, buf[4][:sz])
+
+                data = buf[4][sz:]
+
+
+            #clients.wfile.write(buf)
+            #print(buf)
 
 
 
@@ -65,7 +77,7 @@ if __name__ == '__main__':
     thread1.start()
 
     thread2 = LogServer()
-#    thread2.start()
+    thread2.start()
 
     while True:
         time.sleep(11000)
