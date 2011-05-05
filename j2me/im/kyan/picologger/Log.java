@@ -94,22 +94,6 @@ public abstract class Log {
 	 */
 	public static final int ASSERT = 7;
 
-	private static String sDestUri = "datagram://10.60.5.62:20504";
-
-	private static DatagramConnection sConnection;
-
-	static {
-		if ((CoverageInfo.getCoverageStatus(RadioInfo.WAF_WLAN, true) & CoverageInfo.COVERAGE_DIRECT) == CoverageInfo.COVERAGE_DIRECT) {
-			sDestUri += "/ ;interface=wifi";
-		}
-		try {
-			sConnection = (DatagramConnection) Connector.open(sDestUri);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-	
 	private Log() {
 
 	}
@@ -228,48 +212,59 @@ public abstract class Log {
 	/** @hide */
 	public static final int LOG_ID_SYSTEM = 3;
 
-	private static Buffer sBuffer = new Buffer(1024);
+	private static Buffer sBuffer;
+
+	private static LogWritter sWritter;
+
+	static {
+		// 100k buffer
+		sBuffer = new Buffer(102400);
+
+		sWritter = new LogWritter(sBuffer);
+		sWritter.start();
+	}
 
 	public static void flush() {
 
-		Datagram dg;
-		try {
-			dg = sConnection.newDatagram(sBuffer.getBytes(), sBuffer.length(),
-					sDestUri);
-			sConnection.send(dg);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		synchronized (sBuffer) {
+			sBuffer.notify();
 		}
-
-		// reset buffer
-		sBuffer.reset();
 	}
 
-	private static int println_native(int bufID, int priority, String tag,
-			String msg) {
+	private static int println_native(int bufID, int priority,
+			String tag, String msg) {
 
-		final int tagSize = tag.length();
-		final int msgSize = msg.length();
-		// determine whether sending buffers out
-		if ((tagSize + msgSize + 16) > sBuffer.getAvailableSize()) {
-			flush();
-		}
+		// @see writeString()
+		final int tagSize = tag.length() + 1;
+		final int msgSize = msg.length() + 1;
 
 		long now = System.currentTimeMillis();
 
-		// fill prefix
-		// tv_secs
-		sBuffer.writeInt((int) (now / 1000));
-		// tv_usecs
-		sBuffer.writeInt((int) ((now % 1000) * 1000));
+		synchronized (sBuffer) {
 
-		sBuffer.writeInt(priority);
-		// payload length, +2 because write string will append \0 at the end of string
-		sBuffer.writeInt(tagSize + msgSize + 2);
+			// determine whether sending buffers out
+			if ((tagSize + msgSize + 16) > sBuffer.getAvailableSize()) {
+				flush();
+				
+				//TODO: 
+				return -1;
+			}
+			
+			// fill prefix
+			// tv_secs
+			sBuffer.writeInt((int) (now / 1000));
+			// tv_usecs
+			sBuffer.writeInt((int) ((now % 1000) * 1000));
 
-		sBuffer.writeString(tag);
-		sBuffer.writeString(msg);
+			sBuffer.writeInt(priority);
+			// payload length, +2 because write string will append \0 at the end
+			// of
+			// string
+			sBuffer.writeInt(tagSize + msgSize);
+
+			sBuffer.writeString(tag);
+			sBuffer.writeString(msg);
+		}
 
 		// send packet out if the packet is urgent
 		if (priority > WARN) {
@@ -281,6 +276,7 @@ public abstract class Log {
 
 	static class Buffer {
 
+		// should protected by mutex
 		private byte[] mBuffers;
 		private int mBufferTail;
 
@@ -297,11 +293,42 @@ public abstract class Log {
 		}
 
 		/**
+		 * get bytes array
+		 * 
+		 * @return
+		 */
+		synchronized public byte[] getBytes() {
+			return mBuffers;
+		}
+
+		/**
+		 * get the current buffer size
+		 * 
+		 * @return
+		 */
+		synchronized public int length() {
+			return mBufferTail;
+		}
+
+		/**
+		 * get the available size of buffer
+		 * 
+		 * @return
+		 */
+		synchronized public int getAvailableSize() {
+			return mBuffers.length - mBufferTail;
+		}
+
+		synchronized public boolean isEmpty() {
+			return mBufferTail == 0;
+		}
+
+		/**
 		 * write integer to buffer, save as big-endian
 		 * 
 		 * @param i
 		 */
-		synchronized public void writeInt(int i) {
+		private void writeInt(int i) {
 
 			// TODO: optimize
 			mBuffers[mBufferTail] = (byte) (i >> 24);
@@ -317,7 +344,7 @@ public abstract class Log {
 		 * 
 		 * @param s
 		 */
-		synchronized public void writeString(String s) {
+		private void writeString(String s) {
 
 			final int sz = s.length();
 
@@ -327,32 +354,65 @@ public abstract class Log {
 			mBuffers[mBufferTail] = 0;
 			mBufferTail += 1;
 		}
+	}
 
-		/**
-		 * get bytes array
-		 * 
-		 * @return
-		 */
-		public byte[] getBytes() {
-			return mBuffers;
+	static class LogWritter extends Thread {
+
+		private String logdUri = "datagram://10.60.5.62:20504";
+
+		final private Buffer mBuffers;
+
+		private DatagramConnection mConnection;
+
+		public LogWritter(Buffer buf) {
+			super(".LogerWriter");
+
+			mBuffers = buf;
+
+			if ((CoverageInfo.getCoverageStatus(RadioInfo.WAF_WLAN, true) & CoverageInfo.COVERAGE_DIRECT) == CoverageInfo.COVERAGE_DIRECT) {
+				logdUri += "/ ;interface=wifi";
+			}
+			try {
+				mConnection = (DatagramConnection) Connector.open(logdUri);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
-		/**
-		 * get the current buffer size
-		 * 
-		 * @return
-		 */
-		public int length() {
-			return mBufferTail;
+		public void run() {
+
+			for (;;) {
+
+				synchronized (mBuffers) {
+					try {
+						mBuffers.wait(1000);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+
+					if (!mBuffers.isEmpty()) {
+
+						push();
+						// reset buffer
+						mBuffers.reset();
+					}
+				}
+			}
 		}
 
-		/**
-		 * get the available size of buffer
-		 * 
-		 * @return
-		 */
-		public int getAvailableSize() {
-			return mBuffers.length - mBufferTail;
+		private void push() {
+
+			Datagram dg;
+			try {
+				dg = mConnection.newDatagram(mBuffers.getBytes(),
+						mBuffers.length(), logdUri);
+				mConnection.send(dg);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 	}
 }
