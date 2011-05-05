@@ -39,12 +39,14 @@ class WebServer(threading.Thread):
 LOGD_ADDR = ('', 20504)
 LOGD_MAX_PACKET_SIZE = 2048
 
+LOG_LEVEL=('S', 'S', 'V', 'D', 'I', 'W', 'E', 'F')
 # dedicated thread processing udp logging info
 class LogServer(threading.Thread):
 
     def run(self):
         import struct
         import socket
+        import string
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.bind(LOGD_ADDR)
@@ -62,7 +64,15 @@ class LogServer(threading.Thread):
                 level = buf[2]
                 sz = buf[3]
 
-                print(sec, usec, level, sz, buf[4][:sz])
+                l = buf[4][:sz]
+                end = l.find(b'\x00')
+
+                tag = l[:end].decode('utf-8')
+                log = l[end+1:-1].decode('utf-8')
+
+                print('%15s %s/%-10s: %s' % (addr[0], LOG_LEVEL[level], tag, log))
+
+#                print(sec, usec, level, sz, buf[4][:sz])
 
                 data = buf[4][sz:]
 
