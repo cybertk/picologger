@@ -62,11 +62,9 @@ void dump_client(struct client *c)
 
     // dump address filters
     struct addr_filter *af;
-    D("1");
     list_for_each(node, &c->addrs) {
         af = node_to_item(node, struct addr_filter, list);
-    D("2");
-        //D("    ip    : %s", inet_ntoa(af->addr));
+        D("    ip    : %s", inet_ntoa(af->addr));
     }
 
     // dump tag filters
