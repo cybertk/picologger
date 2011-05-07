@@ -34,7 +34,7 @@ struct client* alloc_client()
     if (!c)
         return 0;
 
-#define MAX_CLIENT_NAME
+#define MAX_CLIENT_NAME     128
     c->name = malloc(MAX_CLIENT_NAME);
     if (!c->name)
         return 0;
