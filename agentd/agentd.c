@@ -277,9 +277,10 @@ static int addr_match(struct client *c, struct in_addr *in)
     list_for_each(node, &c->addrs) {
         af = node_to_item(node, struct addr_filter, list);
 
-        if (af->addr.s_addr == in->s_addr)
+        if (af->addr.s_addr == in->s_addr) {
             D("address match");
             return 1;
+        }
     }
 
     return 0;
@@ -301,9 +302,10 @@ static int tag_match(struct client *c, const char *tag, int priority)
     list_for_each(node, &c->tags) {
         tf = node_to_item(node, struct tag_filter, list);
 
-        if ((priority >= tf->priority) && !(strcmp(tag, tf->tag)))
+        if ((priority >= tf->priority) && !(strcmp(tag, tf->tag))) {
             D("tag match");
             return 1;
+        }
     }
 
     return 0;
@@ -332,7 +334,7 @@ static void notify_clients(char *buf, size_t sz)
         struct client *c;
         list_for_each(node, &clients) {
             c = node_to_item(node, struct client, clist);
-            if (c->flags & CLIENT_MONITOR) {
+            if (c->flags & CLIENT_MONITOR && filter_match(c, l)) {
 
                 D("nofity client %s", c->name);
                 write(c->fde.fd, buf, sz + sizeof(struct in_addr));
