@@ -28,7 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "agentd.h"
+#include "client.h"
 #include "commands.h"
 #include "log.h"
 #include "list.h"

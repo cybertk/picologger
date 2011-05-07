@@ -21,7 +21,7 @@
  *
  */
 
-#include "agentd.h"
+#include "client.h"
 #include "list.h"
 #include "log.h"
 

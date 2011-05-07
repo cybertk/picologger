@@ -40,7 +40,7 @@
 #include "fdevent.h"
 #include "util.h"
 #include "log.h"
-#include "agentd.h"
+#include "client.h"
 #include "commands.h"
 
 list_declare(clients);
@@ -297,7 +297,7 @@ static int tag_match(struct client *c, const char *tag, int priority)
     if (list_empty(&c->tags))
         return 1;
 
-    // match address
+    // match tags
     list_for_each(node, &c->tags) {
         tf = node_to_item(node, struct tag_filter, list);
 

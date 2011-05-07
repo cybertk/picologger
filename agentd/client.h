@@ -20,21 +20,13 @@
  *
  */
 
-#ifndef __AGENTD_H__
-#define __AGENTD_H__
+#ifndef __CLIENT_H__
+#define __CLIENT_H__
 
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include "list.h"
 #include "fdevent.h"
-
-struct socketinfo {
-    //TODO: implement linked
-    //struct socketinfo *next;
-
-    const char *name;
-    int fd;
-};
 
 // address filter
 struct addr_filter {
@@ -71,7 +63,6 @@ struct client {
 
 struct client* alloc_client();
 void destory_client(struct client*);
-
 void dump_client(struct client*);
 
 #endif

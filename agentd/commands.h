@@ -28,7 +28,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "list.h"
-#include "agentd.h"
+#include "client.h"
 
 typedef void (*cmd_func)(struct client *, int, char **);
 
