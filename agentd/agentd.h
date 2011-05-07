@@ -23,8 +23,10 @@
 #ifndef __AGENTD_H__
 #define __AGENTD_H__
 
+#include <sys/stat.h>
+#include <netinet/in.h>
 #include "list.h"
-//#include <sys/stat.h>
+#include "fdevent.h"
 
 struct socketinfo {
     //TODO: implement linked
@@ -34,16 +36,31 @@ struct socketinfo {
     int fd;
 };
 
+// address filter
+struct addr_filter {
+    struct listnode list;
+    struct in_addr addr;
+};
+
+#define TAG_MAX_LENGTH 16
+// tag filter
+struct tag_filter {
+    struct listnode list;
+    char tag[TAG_MAX_LENGTH];
+    int priority;
+};
+
 struct client {
     // list of all clients
     struct listnode clist;
-    //TODO: rm
-    struct listnode services;
 
     char *name;
 
-    // separated by ","
-    char *filter;
+    // list of all address filters
+    struct listnode addrs;
+    // list of all tag filters
+    struct listnode tags;
+
     struct in_addr ip;
 
 #define CLIENT_MONITOR 0x0001
@@ -51,5 +68,10 @@ struct client {
 
     struct fdevent fde;
 };
+
+struct client* alloc_client();
+void destory_client(struct client*);
+
+void dump_client(struct client*);
 
 #endif

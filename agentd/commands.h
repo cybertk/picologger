@@ -1,7 +1,7 @@
 /*
  *   Copyright 2011, Kyan He <kyan.ql.he@gmail.com>
  *
- *   -- services.c --
+ *   -- commands.h --
  *
  *
  *   This program is free software: you can redistribute it and/or modify
@@ -22,42 +22,23 @@
  *
  */
 
-#include "services.h"
-#include "log.h"
+#ifndef __clientS_H__
+#define __clientS_H__
 
-struct command commands[] = {
-    { "LIST",     cmd_list_func,    "list"                  },
-    { "CAPT",     cmd_capt_func,    "capture framebuffer"   },
-    { "QURY",     cmd_qury_func,    "query status"          },
-    { 0, 0, 0 }
+#include <time.h>
+#include <unistd.h>
+#include "list.h"
+#include "agentd.h"
+
+typedef void (*cmd_func)(struct client *, int, char **);
+
+/* all clients we support */
+
+struct command {
+    const char *key;
+    cmd_func func;
+    const char *desc;
 };
 
-void cmd_list_func(struct service *svc)
-{
-    LOG_FUNCTION_NAME
-
-    svc->pid = fork();
-    if (svc->pid < 0) {
-        perror("fork");
-    }
-
-    if (svc->pid == 0) {
-
-        /* redirect stdout, stderr to network */
-        //dup2(fd, 1);
-        //dup2(fd, 2);
-
-        D("pid %d exit", getpid());
-        exit(0);
-    }
-}
-
-void cmd_capt_func(struct service *argv)
-{
-    LOG_FUNCTION_NAME
-}
-
-void cmd_qury_func(struct service *argv)
-{
-    LOG_FUNCTION_NAME
-}
+extern struct command commands[];
+#endif

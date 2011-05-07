@@ -41,10 +41,9 @@
 #include "util.h"
 #include "log.h"
 #include "agentd.h"
-#include "services.h"
+#include "commands.h"
 
 list_declare(clients);
-list_declare(services);
 
 //extern struct command commands[];
 /* used to communicate with child */
@@ -66,32 +65,23 @@ static void dump_clients(void)
     D("--- clients dump ---\n");
     list_for_each(node, &clients) {
         c = node_to_item(node, struct client, clist);
-        D("    name   : %s\n"
-          "    socket : %d",
-             c->name, c->fde.fd);
+        dump_client(c);
     }
 }
 
-
-static void exec_cmds(char **argv)
-{
-    //char *args[] = {"/bin/ls", 0};
-    //execve(args[0], args, 0);
-    if (execve(argv[0], argv, 0) < 0)
-        E("exec %s failed, %s", argv[0], strerror(errno));
-}
-
-static char** parse_cmds(char *line, size_t sz)
+//TODO: performance, optimize
+// return argc
+int parse_cmds(char *line, size_t sz, char ***argv)
 {
     LOG_FUNCTION_NAME
 
     char **args, *s;
     int nargs, i;
 
-    s = line;
-    nargs = 1;
+    // trim leading space
+    while (*line == ' ') line++;
 
-    /* trim */
+    /* trim, make sure line ends with \0 */
     if (line[sz-1] == '\n') {
         sz--;
         line[sz] = 0;
@@ -99,11 +89,23 @@ static char** parse_cmds(char *line, size_t sz)
         line[sz] = 0;
     }
 
+    s = line;
+
+
+    if (!*line) {
+        D("parsing error, no argument found");
+        return 0 ;
+    } else {
+        nargs = 1;
+    }
+
     /* determine nargs and replace space with \0 */
     while (1) {
 
+        // find space, break if not found
         if (!(s = strchr(s, ' '))) break;
 
+        // replace space with \0
         while (*s == ' ') *s++ = 0;
         nargs++;
     }
@@ -115,6 +117,7 @@ static char** parse_cmds(char *line, size_t sz)
 
     s = line;
 
+    // copy arguments
     for (i = 0; i < nargs; i++) {
 
         /* advance to non-zero */
@@ -128,10 +131,11 @@ static char** parse_cmds(char *line, size_t sz)
     /* due to calloc */
     /* cmd->args[nargs] = 0; */
 
-    return args;
+    *argv = args;
+    return nargs;
 }
 
-static struct command* parse_key(char *key)
+static struct command* get_command(char *key)
 {
     LOG_FUNCTION_NAME
 
@@ -156,23 +160,21 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
     struct service *s;
     struct client *c;
     struct command *cmd;
+    char **argv;
+    int argc;
     char linebuf[CMD_MAX_SIZE];
     size_t sz;
 
-    s = calloc(1, sizeof(*s));
-    if (!s)
-        return;
-
+    // get client
     c = (struct client *)cookie;
-    s->clientname = c->name;
 
-    D("--- %s IO ---", s->clientname);
+    D("--- %s IO ---", c->name);
 
     sz = read(fd, linebuf, CMD_MAX_SIZE);
     if (sz == 0) {
         /* close by remote */
         // TODO: check all services under client, and destroy client
-        D("--- %s IO CLOSE ---", s->clientname);
+        D("--- %s IO CLOSE ---", c->name);
         fdevent_remove(&c->fde);
         list_remove(&c->clist);
         dump_clients();
@@ -186,25 +188,31 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
 
     hexdump(linebuf, sz);
 
-    s->args = parse_cmds(linebuf, sz);
-    s->cmd = parse_key(s->args[0]);
-    if (!s->cmd || !s->cmd->func) {
+    // parse linebuf, and get command need invoked
+    argc = parse_cmds(linebuf, sz, &argv);
+    if (!argc) {
         write(fd, "FAIL:0:protocol error\n", 22);
         return;
     }
 
-    if (!strcmp(s->cmd->key, "QURY"))
-        c->flags |= CLIENT_MONITOR;
+    cmd = get_command(argv[0]);
+    if (!cmd || !cmd->func) {
+        write(fd, "FAIL:command not found\n", 22);
+        return;
+    }
 
-    s->id = g_task_id++;
-
-    list_add_tail(&services, &s->slist);
-//    list_add_tail(&c->services, &s->slist);
-
-    sz = sprintf(linebuf, "OKAY:%d\n", s->id);
+    // command accepted
+    sz = sprintf(linebuf, "OKAY\n");
     write(fd, linebuf, sz);
 
-    s->cmd->func(s);
+    // invoke
+    cmd->func(c, argc, argv);
+
+    // free argv
+    int i;
+    for (i = 0; argv[i]; i++)
+        free(argv[i]);
+    free(argv);
 }
 
 static void handle_connect_func(int fd, unsigned events, void* cookie)
@@ -215,7 +223,7 @@ static void handle_connect_func(int fd, unsigned events, void* cookie)
     socklen_t slen;
     int s;
 
-    struct client *c = calloc(1, sizeof(*c));
+    struct client *c = alloc_client();
     if (!c)
         return;
 
@@ -233,8 +241,6 @@ static void handle_connect_func(int fd, unsigned events, void* cookie)
         return;
 
     c->ip.s_addr = sin.sin_addr.s_addr;
-    //TODO: set while receiving monitor
-    c->flags = CLIENT_MONITOR;
 
     sprintf(c->name, "%d", ntohs(sin.sin_port));
 
@@ -256,12 +262,88 @@ struct log_record {
     struct in_addr from;
     struct timeval ts;
     int priority;
+    int size;
     char tag[];
-    char log[];
 };
 
-static void notify_clients(struct log_record *r)
+// check whether current log'address match client's filter, 1 for ture
+static int addr_match(struct client *c, struct in_addr *in)
 {
+    LOG_FUNCTION_NAME
+
+    struct listnode *node;
+    struct addr_filter *af;
+
+    // match all if not filter set
+    if (list_empty(&c->addrs))
+        return 1;
+
+    // match address
+    list_for_each(node, &c->addrs) {
+        af = node_to_item(node, struct addr_filter, list);
+
+        if (af->addr.s_addr == in->s_addr)
+            D("address match");
+            return 1;
+    }
+
+    return 0;
+}
+
+// check whether current log'tag match client's filter, 1 for ture
+static int tag_match(struct client *c, const char *tag, int priority)
+{
+    LOG_FUNCTION_NAME
+
+    struct listnode *node;
+    struct tag_filter *tf;
+
+    // match all if not filter set
+    if (list_empty(&c->tags))
+        return 1;
+
+    // match address
+    list_for_each(node, &c->tags) {
+        tf = node_to_item(node, struct tag_filter, list);
+
+        if ((priority >= tf->priority) && !(strcmp(tag, tf->tag)))
+            D("tag match");
+            return 1;
+    }
+
+    return 0;
+}
+
+// check whether current log match client's filter, 1 for ture
+static int filter_match(struct client *c, struct log_record *l)
+{
+    LOG_FUNCTION_NAME
+
+    return addr_match(c, &l->from) && tag_match(c, l->tag, l->priority);
+}
+
+static void notify_clients(char *buf, size_t sz)
+{
+        // parse packet
+        //
+        struct log_record *l;
+
+        l = (struct log_record *)buf;
+
+        D("prioriry: %d, %s\n", ntohl(l->priority), l->tag);
+
+        /* notify clients */
+        struct listnode *node;
+        struct client *c;
+        list_for_each(node, &clients) {
+            c = node_to_item(node, struct client, clist);
+            if (c->flags & CLIENT_MONITOR) {
+
+                
+                D("nofity client %s", c->name);
+                write(c->fde.fd, buf, sz + sizeof(struct in_addr));
+            }
+        }
 
 }
 
@@ -294,25 +376,8 @@ static void handle_logger_func(int fd, unsigned events, void* cookie)
 
         memcpy(buf, &sa.sin_addr, sizeof(struct in_addr));
 
-        // parse packet
-        int priority;
-        char *tag;
+        notify_clients(buf, sz);
 
-        priority = ntohl(*(int *)(buf+4+8));
-        tag = (char *)(buf + 16+4);
-
-        D("prioriry: %d, %s\n", priority, tag);
-
-        /* notify clients */
-        struct listnode *node;
-        struct client *c;
-        list_for_each(node, &clients) {
-            c = node_to_item(node, struct client, clist);
-            if (c->flags & CLIENT_MONITOR) {
-                D("nofity client %s", c->name);
-                write(c->fde.fd, buf, sz + sizeof(struct in_addr));
-            }
-        }
     }
 }
 
@@ -337,7 +402,7 @@ static void handle_sigchld_func(int fd, unsigned events, void* cookie)
 }
 
 #define LOGD_PORT   20504
-#define AGENTD_PORT 30504
+#define AGENTD_PORT LOGD_PORT
 int main()
 {
     int daemon_fd;
