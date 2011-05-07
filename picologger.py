@@ -56,11 +56,19 @@ class LogServer(threading.Thread):
 
             print('get %s bytes form' % len(data), addr)
 
+            ts = 0
             while data:
-                buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
+                try:
+                    buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
+                except struct.error:
+                    continue
 
                 sec = buf[0]
                 usec = buf[1]
+
+                _t = (buf[0] * 1000.0) + (usec / 1000.0)
+                delta = _t - ts;
+                ts = _t;
                 level = buf[2]
                 sz = buf[3]
 
@@ -70,7 +78,7 @@ class LogServer(threading.Thread):
                 tag = l[:end].decode('utf-8')
                 log = l[end+1:-1].decode('utf-8')
 
-                print('%15s %s/%-10s: %s' % (addr[0], LOG_LEVEL[level], tag, log))
+                print('[%10d]%15s %s/%-10s: %s' % (delta, addr[0], LOG_LEVEL[level], tag, log))
 
 #                print(sec, usec, level, sz, buf[4][:sz])
 
