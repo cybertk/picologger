@@ -68,10 +68,12 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
     struct addr_filter *af;
     struct tag_filter *tf;
 
+    // reset getopt
+    // sems argv[argc] = 0 will not reset optind automatically
+    optind = 1;
     while ((opt = getopt(argc, argv, "a:t:")) != -1) {
         switch (opt) {
             case 'a':
-
                 af = malloc(sizeof(struct addr_filter));
                 if (!af)
                     return -ENOMEM;
@@ -93,6 +95,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                 break;
         }
     }
+
+    dump_client(client);
 }
 
 int cmd_mute_func(struct client *client, int argc, char * const argv[])
