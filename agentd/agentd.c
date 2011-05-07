@@ -236,12 +236,7 @@ static void handle_connect_func(int fd, unsigned events, void* cookie)
     }
     D("%s:%d connected\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
-    c->name = malloc(128);
-    if (!c->name)
-        return;
-
     c->ip.s_addr = sin.sin_addr.s_addr;
-
     sprintf(c->name, "%d", ntohs(sin.sin_port));
 
     fcntl(s, F_SETFL, O_NONBLOCK);

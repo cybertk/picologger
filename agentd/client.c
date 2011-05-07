@@ -30,13 +30,20 @@ struct client* alloc_client()
 
     struct client *c;
 
-    c = calloc(sizeof(struct client), 1);
+    c = calloc(1, sizeof(struct client));
     if (!c)
         return 0;
 
+#define MAX_CLIENT_NAME
+    c->name = malloc(MAX_CLIENT_NAME);
+    if (!c->name)
+        return 0;
+
+    // initialize filters
     list_init(&c->addrs);
     list_init(&c->tags);
 
+    return c;
 }
 
 void destory_client(struct client *c)
