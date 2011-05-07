@@ -80,6 +80,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
 
                 if (inet_aton(optarg, &af->addr) < 0)
                     return -EINVAL;
+
+                //TODO: find duplicate
                 list_add_tail(&client->addrs, &af->list);
                 break;
 
@@ -91,6 +93,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                     return -ENOMEM;
 
                 memcpy(tf->tag, optarg, strlen(optarg));
+
+                //TODO: find duplicate
                 list_add_tail(&client->tags, &tf->list);
                 break;
         }
