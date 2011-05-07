@@ -314,7 +314,7 @@ static int filter_match(struct client *c, struct log_record *l)
 {
     LOG_FUNCTION_NAME
 
-    return addr_match(c, &l->from) && tag_match(c, l->tag, l->priority);
+    return addr_match(c, &l->from) && tag_match(c, l->tag, ntohl(l->priority));
 }
 
 static void notify_clients(char *buf, size_t sz)
@@ -334,7 +334,6 @@ static void notify_clients(char *buf, size_t sz)
             c = node_to_item(node, struct client, clist);
             if (c->flags & CLIENT_MONITOR) {
 
-                
                 D("nofity client %s", c->name);
                 write(c->fde.fd, buf, sz + sizeof(struct in_addr));
             }
