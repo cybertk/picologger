@@ -26,42 +26,38 @@ import struct
 
 DEFAULT_AGENTD_PORT = 20504
 PACKET_MAX_SIZE = 1280
-LOG_LEVEL=('S', 'S', 'V', 'D', 'I', 'W', 'E', 'F')
+LOG_PRIORITY=('S', 'S', 'V', 'D', 'I', 'W', 'E', 'F')
 
 # parse_packet
-ts = 0
+prev_ts = 0
 def parse_packet(data):
     try:
-        buf = struct.unpack('>IIIII%ds' % (len(data) - 20), data)
+        buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
     except struct.error:
         return None
 
-    addr = socket.inet_ntoa(data[0:4])
-    sec = buf[1]
-    usec = buf[2]
+    sec = buf[0]
+    usec = buf[1]
 
-    level = buf[3]
-    if level < 0 or level > len(LOG_LEVEL):
-        level = 0
+    prio = buf[2]
+    if prio < 0 or prio > len(LOG_PRIORITY):
+        prio = 0
 
-    sz = buf[4]
-    l = buf[5][:sz]
+    sz = buf[3]
+    l = buf[4][:sz]
 
     # TODO:rm
-    ts = 0
-    _t = (sec * 1000.0) + (usec / 1000.0)
-    delta = _t - ts;
-    ts = _t;
+    ts = (sec * 1000.0) + (usec / 1000.0)
 
     end = l.find(b'\x00')
     tag = l[:end].decode('utf-8')
     log = l[end+1:-1].decode('utf-8')
 
-    print('[%10d]%15s %s/%-10s: %s' % (delta, addr, LOG_LEVEL[level], tag, log))
+    #print('[%10d]%15s %s/%-10s: %s' % (delta, addr, LOG_prio[level], tag, log))
 
-    return buf[5][sz:]
+    return (buf[4][sz:], ts, addr, prio, tag, log)
 
-if len(sys.argv) != 3:
+if len(sys.argv) < 2 or len(sys.argv) > 3:
     print('Usage: %s <log server ip> [filter]' % sys.argv[0])
     sys.exit(0)
 
@@ -70,7 +66,8 @@ server = (sys.argv[1], DEFAULT_AGENTD_PORT)
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect(server)
 
-s.send(sys.argv[2])
+if len(sys.argv) == 3:
+    s.send(sys.argv[2])
 
 while True:
     data = s.recv(PACKET_MAX_SIZE)
@@ -80,5 +77,19 @@ while True:
         print(data[5:])
         sys.exit(-1)
     else:
+
+        # get from address
+        addr = socket.inet_ntoa(data[0:4])
+        data = data[4:]
+
+        # parse log in loop
         while data:
-            data = parse_packet(data)
+
+            data, ts, addr, prio, tag, log = parse_packet(data)
+
+            # calculate delta time between two log records
+            delta = ts - prev_ts
+            prev_ts =ts
+
+            print('[%7.3f] %s %s/%s: %s'
+                    % (delta / 1000.0, addr, LOG_PRIORITY[prio], tag, log))
