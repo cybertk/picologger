@@ -31,10 +31,7 @@ LOG_PRIORITY=('S', 'S', 'V', 'D', 'I', 'W', 'E', 'F')
 # parse_packet
 prev_ts = 0
 def parse_packet(data):
-    try:
-        buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
-    except struct.error:
-        return None
+    buf = struct.unpack('>IIII%ds' % (len(data) - 16), data)
 
     sec = buf[0]
     usec = buf[1]
@@ -55,7 +52,7 @@ def parse_packet(data):
 
     #print('[%10d]%15s %s/%-10s: %s' % (delta, addr, LOG_prio[level], tag, log))
 
-    return (buf[4][sz:], ts, addr, prio, tag, log)
+    return (buf[4][sz:], ts, prio, tag, log)
 
 if len(sys.argv) < 2 or len(sys.argv) > 3:
     print('Usage: %s <log server ip> [filter]' % sys.argv[0])
@@ -85,7 +82,15 @@ while True:
         # parse log in loop
         while data:
 
-            data, ts, addr, prio, tag, log = parse_packet(data)
+            print len(data)
+            try:
+                data, ts, prio, tag, log = parse_packet(data)
+            except struct.error:
+                data = None
+                print "struct error"
+            except UnicodeDecodeError:
+                data = None
+                print "struct error"
 
             # calculate delta time between two log records
             delta = ts - prev_ts
