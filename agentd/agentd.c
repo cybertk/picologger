@@ -163,7 +163,7 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
     char **argv;
     int argc;
     char linebuf[CMD_MAX_SIZE];
-    size_t sz;
+    int sz;
 
     // get client
     c = (struct client *)cookie;
