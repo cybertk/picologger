@@ -1,0 +1,9 @@
+# any object files generated while compiling
+*.o
+
+# syslog collector
+agentd
+
+# used by amrnb_decoder
+_amr_tmp
+_pcm_tmp
