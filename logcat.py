@@ -43,7 +43,7 @@ def parse_packet(data):
     sz = buf[3]
     l = buf[4][:sz]
 
-    # TODO:rm
+    # convert to millis second
     ts = (sec * 1000.0) + (usec / 1000.0)
 
     end = l.find(b'\x00')
@@ -62,6 +62,8 @@ server = (sys.argv[1], DEFAULT_AGENTD_PORT)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.connect(server)
+
+ts_base = 0
 
 if len(sys.argv) == 3:
     s.send(sys.argv[2])
@@ -82,7 +84,6 @@ while True:
         # parse log in loop
         while data:
 
-            print len(data)
             try:
                 data, ts, prio, tag, log = parse_packet(data)
             except struct.error:
@@ -92,9 +93,12 @@ while True:
                 data = None
                 print "struct error"
 
+            # setup ts base
+            if ts_base == 0:
+                ts_base = ts;
             # calculate delta time between two log records
             delta = ts - prev_ts
-            prev_ts =ts
+            prev_ts = ts
 
             print('[%7.3f] %s %s/%s: %s'
-                    % (delta / 1000.0, addr, LOG_PRIORITY[prio], tag, log))
+                    % ((ts - ts_base) / 1000.0, addr, LOG_PRIORITY[prio], tag, log))
