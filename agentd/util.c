@@ -45,6 +45,29 @@
 #include "log.h"
 #include "list.h"
 
+int unix_datagram_server(const char* path)
+{
+    struct sockaddr_un addr;
+    int opt = 1;
+    int s;
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, path);
+
+    if((s = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        return -1;
+    }
+
+    //setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    if(bind(s, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+        close(s);
+        return -1;
+    }
+
+    return s;
+}
 int local_datagram(int port)
 {
     struct sockaddr_in sa;
