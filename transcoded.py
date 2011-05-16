@@ -13,7 +13,6 @@ DATE_FMT = "%d/%m/%y %H:%M:%S.%f"
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind(SERVER)
 
-f = open("arm_raw", "r")
 just_now = time.time();
 while True:
     data, addr = s.recvfrom(65535)
