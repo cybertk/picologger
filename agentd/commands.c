@@ -33,6 +33,21 @@
 #include "log.h"
 #include "list.h"
 
+struct command* get_command(char *key)
+{
+    LOG_FUNCTION_NAME
+
+    struct command *c;
+    int i;
+
+    for (i = 0; c = &commands[i], c->key; i++) {
+        if (!strcmp(commands[i].key, key))
+            break;
+    }
+
+    return c;
+}
+
 int cmd_help_func(struct client *client, int argc, char * const argv[])
 {
     LOG_FUNCTION_NAME

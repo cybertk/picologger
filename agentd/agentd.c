@@ -69,6 +69,7 @@ static void dump_clients(void)
     }
 }
 
+//TODO: rm
 //TODO: performance, optimize
 // return argc
 int parse_cmds(char *line, size_t sz, char ***argv)
@@ -133,21 +134,6 @@ int parse_cmds(char *line, size_t sz, char ***argv)
 
     *argv = args;
     return nargs;
-}
-
-static struct command* get_command(char *key)
-{
-    LOG_FUNCTION_NAME
-
-    struct command *c;
-    int i;
-
-    for (i = 0; c = &commands[i], c->key; i++) {
-        if (!strcmp(commands[i].key, key))
-            break;
-    }
-
-    return c;
 }
 
 static int g_task_id = 1;
