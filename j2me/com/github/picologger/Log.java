@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package im.kyan.picologger;
+package com.github.picologger;
 
 import java.io.IOException;
 
