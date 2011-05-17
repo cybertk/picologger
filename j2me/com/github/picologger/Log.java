@@ -1,6 +1,9 @@
 /*
  * Copyright (C) 2006 The Android Open Source Project
  *
+ * -- https://github.com/kyan-he/picologger/raw/master/j2me/com/github/picologger/Log.java --
+ * 
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -284,8 +287,9 @@ public abstract class Log
                 {
                     // Not enough buffers, just throw this log away
                     try
-                  
-                    {   System.out.println("push waiting...");
+                    
+                    {
+                        System.out.println("push waiting...");
                         mLock.notify();
                         mLock.wait(1000);
                         System.out.println("push got...");
