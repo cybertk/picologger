@@ -42,6 +42,7 @@
 #include "log.h"
 #include "client.h"
 #include "commands.h"
+#include "syslog.h"
 
 list_declare(clients);
 
@@ -307,26 +308,25 @@ static int filter_match(struct client *c, struct log_record *l)
 
 static void notify_clients(char *buf, size_t sz)
 {
-        // parse packet
-        //
-        struct log_record *l;
+    syslog_record record;
 
-        l = (struct log_record *)buf;
+    D("syslog: %s", buf);
+    parse_line(buf, &record);
+    dump_syslog_record(&record);
 
-        D("prioriry: %d, %s\n", ntohl(l->priority), l->tag);
+    /* notify clients */
+    struct listnode *node;
+    struct client *c;
+    list_for_each(node, &clients) {
+        c = node_to_item(node, struct client, clist);
+        //if (c->flags & CLIENT_MONITOR && filter_match(c, l)) {
+        // TODO: Notify clients according to filtes.
+        if (c->flags & CLIENT_MONITOR) {
 
-        /* notify clients */
-        struct listnode *node;
-        struct client *c;
-        list_for_each(node, &clients) {
-            c = node_to_item(node, struct client, clist);
-            if (c->flags & CLIENT_MONITOR && filter_match(c, l)) {
-
-                D("nofity client %s", c->name);
-                write(c->fde.fd, buf, sz + sizeof(struct in_addr));
-            }
+            D("nofity client %s", c->name);
+            write(c->fde.fd, buf, sz);
         }
-
+    }
 }
 
 //TODO: re-calculate
@@ -335,18 +335,17 @@ static void handle_logger_func(int fd, unsigned events, void* cookie)
 {
     LOG_FUNCTION_NAME
 
-    // insert ip address at header head
-    char buf[LOGD_MAX_PACKET_SZ + sizeof(struct in_addr)];
+    char buf[LOGD_MAX_PACKET_SZ];
     int sz;
     struct sockaddr_in sa;
     int x = sizeof(sa);
 
     //sz = read(fd, buf, LOGD_MAX_PACKET_SZ);
-    sz = recvfrom(fd, buf + sizeof(struct in_addr),
-            LOGD_MAX_PACKET_SZ, 0,
+    sz = recvfrom(fd, buf, LOGD_MAX_PACKET_SZ, 0,
             (struct sockaddr *)&sa, &x);
+
     if (sz == 0) {
-        /* close by remote */
+        /* Close by remote */
         // TODO: check all services under client, and destroy client
         D("--- logger IO CLOSE ---");
         return;
@@ -356,10 +355,8 @@ static void handle_logger_func(int fd, unsigned events, void* cookie)
     } else {
         D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
 
-        memcpy(buf, &sa.sin_addr, sizeof(struct in_addr));
-
+        // Relay to clients.
         notify_clients(buf, sz);
-
     }
 }
 

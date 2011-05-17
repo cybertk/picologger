@@ -1,4 +1,4 @@
-objects = agentd.o fdevent.o util.o commands.o client.o
+objects = agentd.o fdevent.o util.o commands.o client.o syslog.o
 
 TARBALL = agentd.tar.gz
 CFLAGS += -DDEBUG=0 -g
