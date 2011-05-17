@@ -35,6 +35,9 @@ struct syslog_record {
     //TOOD: define structured-data struct
     void *sd;
     char *msg;
+
+    // Indicates this is RFC3164 or RFC5424
+    int bsd;
 };
 
 typedef struct syslog_record syslog_record;

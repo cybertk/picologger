@@ -21,7 +21,7 @@
  */
 
 /**
- * Implement RFC5424
+ * Implement RFC5424 and RFC3164
  */
 
 #include <stdio.h>
@@ -53,45 +53,48 @@ char *parse_token(const char *s, char token, char** saved)
     return ++pos0;
 }
 
-/**
- * ABNF definition of syslog message:
- *
- * SYSLOG-MSG      = HEADER SP STRUCTURED-DATA [SP MSG]
- * HEADER          = PRI VERSION SP TIMESTAMP SP HOSTNAME
- *                   SP APP-NAME SP PROCID SP MSGID
- *
- * Returns -1 if error occurs
- */
-int parse_line(const char* line, syslog_record *record)
+int parse_bsd_syslog(const char* log, syslog_record *record)
+{
+
+    char *pos, *pos0;
+
+    pos = (char *)log;
+    pos0 = pos;
+
+    // Parse timestamp
+    int tokens = 3;
+    while (tokens) {
+
+        pos0 = strchr(pos0, ' ');
+        if (!pos0) {
+            D("malformed syslog record.");
+            return -1;
+        }
+        ++pos0;
+        --tokens;
+    }
+    record->timestamp = strndup(pos, pos0 - pos);
+    pos = pos0;
+
+    // Parse hostname
+    pos = parse_token(pos, SP, &record->hostname);
+
+    // Parse msg
+    record->msg = strdup(pos);
+}
+
+int parse_new_syslog(const char* log, syslog_record *record)
 {
     char *pos, *pos0;
-    char *s;
-    char *end;
 
-    pos = (char *)line;
-
-    // Validate syslog format
-    pos0 = strchr(pos, '>');
-    if (*pos != '<' || (pos0 - pos) > 4){
-        D("malformed syslog record, cannot parse pri.");
-        return -1;
-    }
-    ++pos;
-
-    {
-        // Parse facility and serverity
-        int pri = atoi(pos);
-        record->facility  = pri >> 3;
-        record->serverity = pri & 0x7;
-    }
-    pos = pos0 + 1;
+    pos = (char *)log;
 
     // Parse version
     record->version = atoi(pos);
     pos += 2;
 
     // Skip Header
-    pos0 = (char *)line;
+    pos0 = (char *)log;
     int tokens = 6;
     while (tokens) {
 
@@ -137,6 +140,49 @@ int parse_line(const char* line, syslog_record *record)
     // Parse message
     // TODO: BOM supports
     record->msg = strdup(pos);
+}
+/**
+ * ABNF definition of syslog message:
+ *
+ * SYSLOG-MSG      = HEADER SP STRUCTURED-DATA [SP MSG]
+ * HEADER          = PRI VERSION SP TIMESTAMP SP HOSTNAME
+ *                   SP APP-NAME SP PROCID SP MSGID
+ *
+ * Returns -1 if error occurs
+ */
+int parse_line(const char* line, syslog_record *record)
+{
+    char *pos, *pos0;
+
+    pos = (char *)line;
+
+    // Validate syslog format
+    pos0 = strchr(pos, '>');
+    if (*pos != '<' || (pos0 - pos) > 4){
+        D("malformed syslog record, cannot parse pri.");
+        return -1;
+    }
+    ++pos;
+
+    {
+        // Parse facility and serverity
+        int pri = atoi(pos);
+        record->facility  = pri >> 3;
+        record->serverity = pri & 0x7;
+    }
+    pos = pos0 + 1;
+
+    // Detect syslog version.
+    D("isdigit: %d", isdigit(*pos));
+    if (isdigit(*pos)) {
+
+        record->bsd = 0;
+        return parse_new_syslog(pos, record);
+    } else {
+
+        record->bsd = 1;
+        return parse_bsd_syslog(pos, record);
+    }
 
     return 0;
 }
@@ -145,13 +191,16 @@ void dump_syslog_record(syslog_record *record)
 {
     D("Facility: %d", record->facility);
     D("Serverity: %d", record->serverity);
-    D("Version: %d", record->version);
+    if (!record->bsd)
+        D("Version: %d", record->version);
     D("Timestamp: %s", record->timestamp);
     D("Hostname: %s", record->hostname);
-    D("App-name: %s", record->appname);
-    D("Procid: %s", record->procid);
-    D("Msgid: %s", record->msgid);
-    D("Sd: %s", record->sd);
+    if (!record->bsd) {
+        D("App-name: %s", record->appname);
+        D("Procid: %s", record->procid);
+        D("Msgid: %s", record->msgid);
+        D("Sd: %s", record->sd);
+    }
     D("Msg: %s", record->msg);
 }
 
