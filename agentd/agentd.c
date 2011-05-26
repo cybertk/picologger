@@ -197,7 +197,7 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
 
     // free argv
     int i;
-    for (i = 0; argv[i]; i++)
+    for (i = 0; i < argc; i++)
         free(argv[i]);
     free(argv);
 }
