@@ -7,3 +7,6 @@ agentd
 # used by amrnb_decoder
 _amr_tmp
 _pcm_tmp
+
+jsyslogd/bin
+jsyslogd/.settings
