@@ -125,18 +125,24 @@ int parse_new_syslog(const char* log, syslog_record *record)
 
     // Parse sd
     if (*pos0 == '[') {
+
+        char *end;
+
         pos = pos0;
 
+        // There may be more than one sd-element
         while (pos = strchr(pos, ']')) {
 
-            if (*(pos - 1) != '\\')
-                break;
             ++pos;
+            if (*(pos - 2) != '\\')
+                end = pos;
         }
+
+        pos = end;
     }
     record->sd = strndup(pos0, pos - pos0);
 
-    pos += 2;
+    pos += 1;
     // Parse message
     // TODO: BOM supports
     record->msg = strdup(pos);
@@ -210,7 +216,12 @@ int main()
     syslog_record r;
     char *log = "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - - %% It\'s time to make the do-nuts.";
 
+    char *log_with_sds = "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1111\"] [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] BOMAn application event log entry...";
+
     parse_line(log, &r);
+    dump_syslog_record(&r);
+
+    parse_line(log_with_sds, &r);
     dump_syslog_record(&r);
 }
 #endif
