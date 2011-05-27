@@ -171,10 +171,10 @@ int parse_line(const char* line, syslog_record *record)
     ++pos;
 
     {
-        // Parse facility and serverity
+        // Parse facility and severity
         int pri = atoi(pos);
         record->facility  = pri >> 3;
-        record->serverity = pri & 0x7;
+        record->severity = pri & 0x7;
     }
     pos = pos0 + 1;
 
@@ -196,7 +196,7 @@ int parse_line(const char* line, syslog_record *record)
 void dump_syslog_record(syslog_record *record)
 {
     D("Facility: %d", record->facility);
-    D("Serverity: %d", record->serverity);
+    D("severity: %d", record->severity);
     if (!record->bsd)
         D("Version: %d", record->version);
     D("Timestamp: %s", record->timestamp);

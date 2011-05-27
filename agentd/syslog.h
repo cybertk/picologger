@@ -25,7 +25,7 @@
 
 struct syslog_record {
     char facility;
-    char serverity;
+    char severity;
     char version;
     char *timestamp;
     char *hostname;
