@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+<plugin>
+   <extension
+         point="org.eclipse.ui.views">
+      <category
+            name="BlackBerry"
+            id="com.davidko.eclipse.logclient.views.category">
+      </category>
+      <view
+            allowMultiple="false"
+            category="com.davidko.eclipse.logclient.views.category"
+            class="com.davidko.logclient.eclipse.views.LogClientView"
+            icon="icons/android.png"
+            id="com.davidko.logclient.eclipse.views.LogClientView"
+            name="LogClient"/>
+   </extension>
+   <extension
+         point="org.eclipse.core.runtime.preferences">
+      <initializer class="com.davidko.logclient.eclipse.preferences.PreferenceInitializer"/>
+   </extension>
+   <extension
+         point="org.eclipse.ui.preferencePages">
+      <page
+            class="com.davidko.logclient.eclipse.preferences.LogClientPreferencePage"
+            id="com.davidko.logclient.eclipse.preferences.LogClientPreferencePage"
+            name="LogClient"/>
+   </extension>
+</plugin>
