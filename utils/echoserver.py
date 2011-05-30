@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#  -- https://github.com/kyan-he/picologger/raw/master/echoserver.py --
+#  -- https://github.com/kyan-he/picologger/raw/master/utils/echoserver.py --
 #
 #  Copyright 2011, Kyan He <kyan.ql.he@gmail.com>
 #
