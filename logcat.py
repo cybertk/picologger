@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#  -- https://android-autotool.googlecode.com/svn/trunk/logcat.py --
+#  -- https://github.com/kyan-he/picologger/raw/master/logcat.py --
 #
 #  Python picologger client
 #
