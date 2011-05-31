@@ -269,9 +269,9 @@ static int addr_match(struct client *c, struct in_addr *in)
     struct listnode *node;
     struct addr_filter *af;
 
-    // match all if not filter set
+    // match failed if not filter set
     if (list_empty(&c->addrs))
-        return 1;
+        return 0;
 
     // match address
     list_for_each(node, &c->addrs) {
