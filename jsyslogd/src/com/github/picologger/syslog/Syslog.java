@@ -1,5 +1,8 @@
 package com.github.picologger.syslog;
 
+import java.util.Calendar;
+import java.util.Date;
+
 /**
  * Implement RFC5424 and RFC3164
  * 
@@ -174,7 +177,8 @@ public class Syslog
         str += msgid + " ";
         str += sd;
         
-        if (!msg.isEmpty())
+        // <code>isEmpty()</code> is unavailable in J2ME.
+        if (!"".equals(msg))
         {
             str += " " + msg;
         }
@@ -182,7 +186,6 @@ public class Syslog
         return str;
     }
     
-    @Override
     public String toString()
     {
         String str = "";
@@ -203,6 +206,7 @@ public class Syslog
     
     private void decode(String record) throws IllegalArgumentException
     {
+        /*
         int pos0 = 0;
         int pos = 0;
         
@@ -216,7 +220,7 @@ public class Syslog
         // Parse Header.
         
         // Parse facility and severity.
-        int pri = Integer.decode(record.substring(1, pos));
+        int pri = Integer.parseInt((record.substring(1, pos)));
         facility = pri >> 3;
         severity = pri & 0x7;
         
@@ -224,7 +228,7 @@ public class Syslog
         ++pos;
         version = record.charAt(pos) - 0x30;
         
-        String[] token = record.split(" +", 7);
+        String[] token = record.split(" ", 7);
         
         timestamp = token[1];
         hostname = token[2];
@@ -270,5 +274,64 @@ public class Syslog
         {
             msg = "";
         }
+        */
+    }
+    
+    String currentTimestamp()
+    {
+        // Add the TIMESTAMP field of the HEADER
+        // Time format is "Mmm dd hh:mm:ss". For more info see rfc3164.
+        
+        Calendar calendar = Calendar.getInstance();
+        
+        long currentTime = System.currentTimeMillis();
+        calendar.setTime(new Date(currentTime));
+        
+        String str = "";
+        str += calendar.get(Calendar.YEAR) + "-";
+        
+        final int month = calendar.get(Calendar.MONTH) + 1;
+        if (month < 10)
+        {
+            str += 0;
+        }
+        str += month + "-";
+        
+        final int day = calendar.get(Calendar.DAY_OF_MONTH);
+        if (day < 10)
+        {
+            str += 0;
+        }
+        str += day;
+        
+        str += "T";
+        
+        final int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        if (hour < 10)
+        {
+            str += 0;
+        }
+        str += hour + ":";
+        
+        final int minute = calendar.get(Calendar.MINUTE);
+        if (minute < 10)
+        {
+            str += 0;
+        }
+        str += minute + ":";
+        
+        final int second = calendar.get(Calendar.SECOND);
+        if (second < 10)
+        {
+            str += 0;
+        }
+        str += second + ".";
+        
+        final int milli = calendar.get(Calendar.MILLISECOND);
+        str += milli;
+        
+        str += "Z";
+        
+        return str;
     }
 }

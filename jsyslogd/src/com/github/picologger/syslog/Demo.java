@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class Demo
 {
@@ -32,6 +35,7 @@ public class Demo
         
         l = new Syslog(raw);
         System.out.println(l);
+        System.out.println(l.currentTimestamp());
         
         ServerSocket s = null;
         try
@@ -61,7 +65,7 @@ public class Demo
                     break;
                 }
                 
-                Syslog log = new Syslog(new String(bytes, 0, bytesRead));
+                Syslog log = Parser.parse(new String(bytes, 0, bytesRead));
                 System.out.println(log);
             }
             catch (IOException e)
