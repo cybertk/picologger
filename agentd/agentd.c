@@ -327,7 +327,7 @@ static void notify_clients(char *buf, size_t sz)
 
         l = (struct log_record *)buf;
 
-        D("prioriry: %d, %s\n", ntohl(l->priority), l->tag);
+        //D("prioriry: %d, %s\n", ntohl(l->priority), l->tag);
 
         /* notify clients */
         struct listnode *node;
@@ -368,7 +368,7 @@ static void handle_logger_func(int fd, unsigned events, void* cookie)
         perror("read");
         return;
     } else {
-        D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
+        //D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
 
         memcpy(buf, &sa.sin_addr, sizeof(struct in_addr));
 
