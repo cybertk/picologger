@@ -20,6 +20,7 @@
 package com.github.picologger;
 
 import java.io.IOException;
+import java.util.Vector;
 
 import javax.microedition.io.Connector;
 import javax.microedition.io.Datagram;
@@ -27,6 +28,8 @@ import javax.microedition.io.DatagramConnection;
 
 import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
+
+import com.github.picologger.syslog.Syslog;
 
 /**
  * API for sending log output.
@@ -114,7 +117,7 @@ public abstract class Log
      */
     public static int v(String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, VERBOSE, tag, msg);
+        return log(LOG_ID_MAIN, VERBOSE, tag, msg);
     }
     
     /**
@@ -128,7 +131,7 @@ public abstract class Log
      */
     public static int d(String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, DEBUG, tag, msg);
+        return log(LOG_ID_MAIN, DEBUG, tag, msg);
     }
     
     /**
@@ -142,7 +145,7 @@ public abstract class Log
      */
     public static int i(String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, INFO, tag, msg);
+        return log(LOG_ID_MAIN, INFO, tag, msg);
     }
     
     /**
@@ -156,7 +159,7 @@ public abstract class Log
      */
     public static int w(String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, WARN, tag, msg);
+        return log(LOG_ID_MAIN, WARN, tag, msg);
     }
     
     /**
@@ -194,7 +197,7 @@ public abstract class Log
      */
     public static int e(String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, ERROR, tag, msg);
+        return log(LOG_ID_MAIN, ERROR, tag, msg);
     }
     
     /**
@@ -211,7 +214,7 @@ public abstract class Log
      */
     public static int println(int priority, String tag, String msg)
     {
-        return println_native(LOG_ID_MAIN, priority, tag, msg);
+        return log(LOG_ID_MAIN, priority, tag, msg);
     }
     
     /** @hide */
@@ -232,34 +235,33 @@ public abstract class Log
     
     static
     {
-        // 1200 is max payload
         sQueue = new LogQueue(1000);
         
         sWritter = new LogWritter(sQueue);
         sWritter.start();
     }
     
-    private static int println_native(int bufID, int priority, String tag,
-            String msg)
+    private static int log(int bufID, int priority, String tag, String msg)
     {
-        sQueue.push(priority, tag, msg);
+        Syslog log = new Syslog();
+        log.setFacility(priority);
+        log.setAppname(tag);
+        log.setMsg(msg);
+        sQueue.push(log);
         
         return 0;
     }
     
     static class LogQueue
     {
-        
-        private Object mLock = new Object();
-        
         // should protected by mutex
-        private byte[] mBuffers;
+        private Vector mQueue = new Vector();
         
-        private int mBufferTail;
+        private int mQueueMaxSize;
         
         public LogQueue(int sz)
         {
-            mBuffers = new byte[sz];
+            mQueueMaxSize = sz;
             reset();
         }
         
@@ -268,127 +270,59 @@ public abstract class Log
          */
         private void reset()
         {
-            mBufferTail = 0;
+            mQueue.removeAllElements();
         }
         
         /**
          * Push one log record into queue.
          */
-        public void push(int priority, String tag, String msg)
+        public void push(Syslog log)
         {
-            // @see writeString()
-            final int tagSize = tag.length() + 1;
-            final int msgSize = msg.length() + 1;
-            long now = System.currentTimeMillis();
             
-            synchronized (mLock)
+            if (mQueue.size() == mQueueMaxSize)
             {
-                while ((tagSize + msgSize + 16 + mBufferTail) > mBuffers.length)
-                {
-                    // Not enough buffers, just throw this log away
-                    try
-                    
-                    {
-                        System.out.println("push waiting...");
-                        mLock.notify();
-                        mLock.wait(1000);
-                        System.out.println("push got...");
-                    }
-                    catch (InterruptedException e)
-                    {
-                    }
-                }
-                //TODO: determine available buffer size.
-                // fill prefix
-                // tv_secs
-                writeInt((int) (now / 1000));
-                // tv_usecs
-                writeInt((int) ((now % 1000) * 1000));
+                // Queue overflow, drop the log.
                 
-                writeInt(priority);
-                // payload length, +2 because write string will append \0 at the end
-                // of
-                // string
-                writeInt(tagSize + msgSize);
-                
-                writeString(tag);
-                writeString(msg);
-                mLock.notify();
+                return;
+            }
+            
+            // TODO: We do not want acquire a mutex-lock.
+            synchronized (mQueue)
+            {
+                mQueue.addElement(log);
+                mQueue.notify();
             }
         }
         
         /**
-         * Returns one log record.
+         * TODO: return more than one records. Returns one log record.
          */
-        public byte[] pop()
+        public Syslog pop()
         {
-            byte[] log;
             
-            synchronized (mLock)
+            synchronized (mQueue)
             {
                 try
                 {
-                    mLock.wait();
-                    System.out.println("pop got...");
+                    mQueue.wait();
                 }
                 catch (InterruptedException e)
                 {
+                    // hmm...
                 }
-                log = new byte[mBufferTail];
                 
-                System.arraycopy(mBuffers, 0, log, 0, mBufferTail);
+                Syslog log = (Syslog) mQueue.firstElement();
+                mQueue.removeElementAt(0);
                 
-                reset();
-                mLock.notify();
+                return log;
             }
-            return log;
-            
-        }
-        
-        synchronized public boolean isEmpty()
-        {
-            return mBufferTail == 0;
-        }
-        
-        /**
-         * write integer to buffer, save as big-endian
-         * 
-         * @param i
-         */
-        private void writeInt(int i)
-        {
-            
-            // TODO: optimize
-            mBuffers[mBufferTail] = (byte) (i >> 24);
-            mBuffers[mBufferTail + 1] = (byte) (i >> 16);
-            mBuffers[mBufferTail + 2] = (byte) (i >> 8);
-            mBuffers[mBufferTail + 3] = (byte) (i);
-            
-            mBufferTail += 4;
-        }
-        
-        /**
-         * write String to buffer, will append \0 at the end
-         * 
-         * @param s
-         */
-        private void writeString(String s)
-        {
-            
-            final int sz = s.length();
-            
-            System.arraycopy(s.getBytes(), 0, mBuffers, mBufferTail, sz);
-            mBufferTail += sz;
-            
-            mBuffers[mBufferTail] = 0;
-            mBufferTail += 1;
         }
     }
     
     static class LogWritter extends Thread
     {
         
-        private String logdUri = "datagram://10.60.5.62:20504";
+        private String logdUri = "datagram://10.60.5.62:20505";
         
         final private LogQueue mQueue;
         
@@ -417,34 +351,28 @@ public abstract class Log
         
         public void run()
         {
-            
-            long lastRead = System.currentTimeMillis();
-            long now;
             for (;;)
             {
-                now = System.currentTimeMillis();
-                byte[] data = mQueue.pop();
-                
-                System.out.println("delta " + (now - lastRead) + " size, "
-                        + data.length);
-                push(data, data.length);
-                
+                Syslog log = mQueue.pop();
+                push(log);
             }
         }
         
-        private void push(byte[] data, int sz)
+        private void push(Syslog log)
         {
             
             Datagram dg;
             try
             {
-                dg = mConnection.newDatagram(data, sz, logdUri);
+                String raw = log.encode();
+                dg = mConnection.newDatagram(raw.getBytes(),
+                        raw.length(),
+                        logdUri);
                 mConnection.send(dg);
             }
             catch (IOException e)
             {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
+                // ahh...
             }
         }
     }
