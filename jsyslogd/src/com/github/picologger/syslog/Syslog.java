@@ -162,7 +162,7 @@ public class Syslog
         String str = "";
         
         // Generates PRI.
-        int pri = (facility >> 3) + severity;
+        int pri = (facility << 3) + severity;
         str += "<" + pri + ">";
         
         // Generates version.
