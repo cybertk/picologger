@@ -42,4 +42,6 @@ struct syslog_record {
 
 typedef struct syslog_record syslog_record;
 
+int syslog_parse(char*, int, syslog_record *);
+
 #endif
