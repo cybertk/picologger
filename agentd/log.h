@@ -36,8 +36,16 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#if DEBUG == 1
+
 #define LOG_FUNCTION_NAME \
             fprintf(stderr, "\033[0;1;31m__func__: %s\033[0;0m\n", __FUNCTION__);
+
+#else
+
+#define LOG_FUNCTION_NAME
+
+#endif
 
 static void
 D(const char *msg, ...)
