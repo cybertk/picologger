@@ -53,7 +53,7 @@ char *parse_token(const char *s, char token, char** saved)
     return ++pos0;
 }
 
-int parse_bsd_syslog(const char* log, syslog_record *record)
+static int parse_rfc3164(const char* log, syslog_record *record)
 {
 
     char *pos, *pos0;
@@ -83,7 +83,7 @@ int parse_bsd_syslog(const char* log, syslog_record *record)
     record->msg = strdup(pos);
 }
 
-int parse_new_syslog(const char* log, syslog_record *record)
+static int parse_rfc5424(const char* log, syslog_record *record)
 {
     char *pos, *pos0;
 
@@ -139,13 +139,22 @@ int parse_new_syslog(const char* log, syslog_record *record)
         }
 
         pos = end;
+    } else {
+        // NILVALUE, "-".
+        pos = pos0 + 1;
     }
     record->sd = strndup(pos0, pos - pos0);
 
-    pos += 1;
     // Parse message
-    // TODO: BOM supports
-    record->msg = strdup(pos);
+    if ((pos - log) < strlen(log)) {
+
+        pos += 1;
+        // TODO: BOM supports
+        record->msg = strdup(pos);
+    } else {
+
+        record->msg = strdup("");
+    }
 }
 /**
  * ABNF definition of syslog message:
@@ -156,7 +165,7 @@ int parse_new_syslog(const char* log, syslog_record *record)
  *
  * Returns -1 if error occurs
  */
-int parse_line(const char* line, syslog_record *record)
+static int parse_line(const char* line, syslog_record *record)
 {
     char *pos, *pos0;
 
@@ -179,18 +188,29 @@ int parse_line(const char* line, syslog_record *record)
     pos = pos0 + 1;
 
     // Detect syslog version.
-    D("isdigit: %d", isdigit(*pos));
     if (isdigit(*pos)) {
 
         record->bsd = 0;
-        return parse_new_syslog(pos, record);
+        return parse_rfc5424(pos, record);
     } else {
 
         record->bsd = 1;
-        return parse_bsd_syslog(pos, record);
+        return parse_rfc3164(pos, record);
     }
 
     return 0;
+}
+
+/**
+ * Parse syslogs from given data.
+ *
+ * Returns -1 if error occurs
+ */
+int syslog_parse(char *data, int sz, syslog_record *record)
+{
+    // TODO: support 1-line.
+    data[sz] = 0;
+    return parse_line(data, record);
 }
 
 void dump_syslog_record(syslog_record *record)
@@ -208,6 +228,7 @@ void dump_syslog_record(syslog_record *record)
         D("Sd: %s", record->sd);
     }
     D("Msg: %s", record->msg);
+    D("");
 }
 
 #ifdef SYSLOG_TEST
@@ -218,10 +239,18 @@ int main()
 
     char *log_with_sds = "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com evntslog - ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1111\"] [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] BOMAn application event log entry...";
 
+    char *log_without_msg = "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - -";
+
+    printf("== Nomral Log ==\n");
     parse_line(log, &r);
     dump_syslog_record(&r);
 
+    printf("== Log with two SDs ==\n");
     parse_line(log_with_sds, &r);
+    dump_syslog_record(&r);
+
+    printf("== Log without both SD and Message ==\n");
+    parse_line(log_without_msg, &r);
     dump_syslog_record(&r);
 }
 #endif

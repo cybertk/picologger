@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-#  -- https://android-autotool.googlecode.com/svn/trunk/logcat.py --
+#  -- https://github.com/kyan-he/picologger/raw/master/logcat.py --
 #
 #  Python picologger client
 #
@@ -68,6 +68,7 @@ ts_base = 0
 if len(sys.argv) == 3:
     s.send(sys.argv[2])
 
+f = open('logs', 'w')
 while True:
     data = s.recv(PACKET_MAX_SIZE)
     if data[0:4] == "OKAY":
@@ -100,5 +101,8 @@ while True:
             delta = ts - prev_ts
             prev_ts = ts
 
-            print('[%7.3f] %s %s/%s: %s'
-                    % ((ts - ts_base) / 1000.0, addr, LOG_PRIORITY[prio], tag, log))
+            log = '[%7.3f] %s %s/%s: %s' % ((ts - ts_base) / 1000.0, addr, LOG_PRIORITY[prio], tag, log)
+
+            f.write(log)
+            f.write('\n')
+            print log
