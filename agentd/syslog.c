@@ -53,7 +53,7 @@ char *parse_token(const char *s, char token, char** saved)
     return ++pos0;
 }
 
-int parse_bsd_syslog(const char* log, syslog_record *record)
+static int parse_rfc3164(const char* log, syslog_record *record)
 {
 
     char *pos, *pos0;
@@ -83,7 +83,7 @@ int parse_bsd_syslog(const char* log, syslog_record *record)
     record->msg = strdup(pos);
 }
 
-int parse_new_syslog(const char* log, syslog_record *record)
+static int parse_rfc5424(const char* log, syslog_record *record)
 {
     char *pos, *pos0;
 
@@ -165,7 +165,7 @@ int parse_new_syslog(const char* log, syslog_record *record)
  *
  * Returns -1 if error occurs
  */
-int parse_line(const char* line, syslog_record *record)
+static int parse_line(const char* line, syslog_record *record)
 {
     char *pos, *pos0;
 
@@ -188,18 +188,29 @@ int parse_line(const char* line, syslog_record *record)
     pos = pos0 + 1;
 
     // Detect syslog version.
-    D("isdigit: %d", isdigit(*pos));
     if (isdigit(*pos)) {
 
         record->bsd = 0;
-        return parse_new_syslog(pos, record);
+        return parse_rfc5424(pos, record);
     } else {
 
         record->bsd = 1;
-        return parse_bsd_syslog(pos, record);
+        return parse_rfc3164(pos, record);
     }
 
     return 0;
+}
+
+/**
+ * Parse syslogs from given data.
+ *
+ * Returns -1 if error occurs
+ */
+int syslog_parse(char *data, int sz, syslog_record *record)
+{
+    // TODO: support 1-line.
+    data[sz] = 0;
+    return parse_line(data, record);
 }
 
 void dump_syslog_record(syslog_record *record)
