@@ -170,7 +170,7 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
         perror("read");
         return;
     } else {
-        D("recv %d bytes from remote", sz);
+        //D("recv %d bytes from remote", sz);
     }
 
     hexdump(linebuf, sz);
@@ -311,8 +311,8 @@ static void notify_clients(char *buf, size_t sz)
     syslog_record record;
 
     D("syslog: %s", buf);
-    parse_line(buf, &record);
-    dump_syslog_record(&record);
+    //parse_line(buf, &record);
+    //dump_syslog_record(&record);
 
     /* notify clients */
     struct listnode *node;
@@ -353,7 +353,7 @@ static void handle_logger_func(int fd, unsigned events, void* cookie)
         perror("read");
         return;
     } else {
-        D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
+        //D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
 
         // Relay to clients.
         notify_clients(buf, sz);
@@ -380,7 +380,7 @@ static void handle_sigchld_func(int fd, unsigned events, void* cookie)
 
 }
 
-#define LOGD_PORT           20504
+#define LOGD_PORT           20505
 #define LOGD_SOCKET_PATH    "syslog-relay"
 #define AGENTD_PORT         LOGD_PORT
 
