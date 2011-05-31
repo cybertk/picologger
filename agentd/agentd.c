@@ -398,14 +398,12 @@ static void handle_sigchld_func(int fd, unsigned events, void* cookie)
 }
 
 #define LOGD_PORT           20504
-#define LOGD_SOCKET_PATH    "syslog-relay"
 #define AGENTD_PORT         LOGD_PORT
 
 int main()
 {
     int daemon_fd;
     int logd_fd;
-    int relay_fd;
     int signal_recv_fd;
     int fd_count;
     int s[2];
@@ -429,9 +427,6 @@ int main()
     /* init logd datagram */
     logd_fd = local_datagram(LOGD_PORT);
 
-    /* init syslog relay unix datagram */
-    relay_fd = unix_datagram_server(LOGD_SOCKET_PATH);
-
     /* create a mechansim for sigchld handler */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == 0) {
         signal_fd = s[0];
@@ -445,7 +440,6 @@ int main()
     /* make sure we are ready */
     if ((daemon_fd < 0) ||
         (logd_fd < 0) ||
-        (relay_fd < 0) ||
         (signal_recv_fd < 0)) {
         E("init failture");
         exit(1);
@@ -458,9 +452,6 @@ int main()
     fdevent_set(fde, FDE_READ);
 
     fde = fdevent_create(logd_fd, handle_logger_func, 0);
-    fdevent_set(fde, FDE_READ);
-
-    fde = fdevent_create(relay_fd, handle_logger_func, 0);
     fdevent_set(fde, FDE_READ);
 
     fde = fdevent_create(signal_recv_fd, handle_sigchld_func, 0);
