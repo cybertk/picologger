@@ -1,5 +1,8 @@
 package com.github.picologger.syslog;
 
+import java.util.Calendar;
+import java.util.Date;
+
 /**
  * Implement RFC5424 and RFC3164
  * 
@@ -32,6 +35,106 @@ public class Syslog
     // Indicates this is RFC3164 or RFC5424
     private boolean bsd;
     
+    public int getFacility()
+    {
+        return facility;
+    }
+    
+    public void setFacility(int facility)
+    {
+        this.facility = facility;
+    }
+    
+    public int getSeverity()
+    {
+        return severity;
+    }
+    
+    public void setSeverity(int severity)
+    {
+        this.severity = severity;
+    }
+    
+    public int getVersion()
+    {
+        return version;
+    }
+    
+    public void setVersion(int version)
+    {
+        this.version = version;
+    }
+    
+    public String getTimestamp()
+    {
+        return timestamp;
+    }
+    
+    public void setTimestamp(String timestamp)
+    {
+        this.timestamp = timestamp;
+    }
+    
+    public String getHostname()
+    {
+        return hostname;
+    }
+    
+    public void setHostname(String hostname)
+    {
+        this.hostname = hostname;
+    }
+    
+    public String getAppname()
+    {
+        return appname;
+    }
+    
+    public void setAppname(String appname)
+    {
+        this.appname = appname;
+    }
+    
+    public String getProcid()
+    {
+        return procid;
+    }
+    
+    public void setProcid(String procid)
+    {
+        this.procid = procid;
+    }
+    
+    public String getMsgid()
+    {
+        return msgid;
+    }
+    
+    public void setMsgid(String msgid)
+    {
+        this.msgid = msgid;
+    }
+    
+    public String getSd()
+    {
+        return sd;
+    }
+    
+    public void setSd(String sd)
+    {
+        this.sd = sd;
+    }
+    
+    public String getMsg()
+    {
+        return msg;
+    }
+    
+    public void setMsg(String msg)
+    {
+        this.msg = msg;
+    }
+    
     public Syslog(String record)
     {
         decode(record);
@@ -39,13 +142,50 @@ public class Syslog
     
     public Syslog()
     {
-    }
-    
-    public void encode() {
+        // Local use 0 (local0).
+        facility = 16;
+        
+        // Debug.
+        severity = 7;
+        
+        // RFC Specified.
+        version = 1;
+        timestamp = "-";
+        hostname = "-";
+        appname = "-";
+        procid = "-";
+        msgid = "-";
+        sd = "-";
+        msg = "";
         
     }
     
-    @Override
+    public String encode()
+    {
+        String str = "";
+        
+        // Generates PRI.
+        int pri = (facility << 3) + severity;
+        str += "<" + pri + ">";
+        
+        // Generates version.
+        str += version + " ";
+        str += timestamp + " ";
+        str += hostname + " ";
+        str += appname + " ";
+        str += procid + " ";
+        str += msgid + " ";
+        str += sd;
+        
+        // <code>isEmpty()</code> is unavailable in J2ME.
+        if (!"".equals(msg))
+        {
+            str += " " + msg;
+        }
+        
+        return str;
+    }
+    
     public String toString()
     {
         String str = "";
@@ -63,9 +203,10 @@ public class Syslog
         
         return str;
     }
-
+    
     private void decode(String record) throws IllegalArgumentException
     {
+        /*
         int pos0 = 0;
         int pos = 0;
         
@@ -79,16 +220,15 @@ public class Syslog
         // Parse Header.
         
         // Parse facility and severity.
-        int pri = Integer.decode(record.substring(1,pos));
+        int pri = Integer.parseInt((record.substring(1, pos)));
         facility = pri >> 3;
         severity = pri & 0x7;
         
         // Parse Version.
         ++pos;
         version = record.charAt(pos) - 0x30;
-            
         
-        String[] token = record.split(" +", 7);
+        String[] token = record.split(" ", 7);
         
         timestamp = token[1];
         hostname = token[2];
@@ -97,26 +237,101 @@ public class Syslog
         msgid = token[5];
         
         // Parse SD
-        while (true)
+        if (token[6].charAt(0) == '[')
         {
-            pos0 = token[6].indexOf(']', pos0);
-            
-            if (pos0 == -1)
+            while (true)
             {
-                break;
-            }
-            
-            ++pos0;
-            
-            // Record the index.
-            if (token[6].charAt(pos0 - 2) != '\\')
-            {
-                // Make sure it's not a escaped "]".
-                pos = pos0;
+                pos0 = token[6].indexOf(']', pos0);
+                if (pos0 == -1)
+                {
+                    break;
+                }
+                
+                ++pos0;
+                
+                // Record the index.
+                if (token[6].charAt(pos0 - 2) != '\\')
+                {
+                    // Make sure it's not a escaped "]".
+                    pos = pos0;
+                }
             }
         }
-        
+        else
+        {
+            // NILVAULE, "-".
+            
+            pos = 1;
+        }
         sd = token[6].substring(0, pos);
-        msg = token[6].substring(pos + 1);
+        
+        // Parse message.
+        if (pos > token[6].length())
+        {
+            msg = token[6].substring(pos + 1);
+        }
+        else
+        {
+            msg = "";
+        }
+        */
+    }
+    
+    String currentTimestamp()
+    {
+        // Add the TIMESTAMP field of the HEADER
+        // Time format is "Mmm dd hh:mm:ss". For more info see rfc3164.
+        
+        Calendar calendar = Calendar.getInstance();
+        
+        long currentTime = System.currentTimeMillis();
+        calendar.setTime(new Date(currentTime));
+        
+        String str = "";
+        str += calendar.get(Calendar.YEAR) + "-";
+        
+        final int month = calendar.get(Calendar.MONTH) + 1;
+        if (month < 10)
+        {
+            str += 0;
+        }
+        str += month + "-";
+        
+        final int day = calendar.get(Calendar.DAY_OF_MONTH);
+        if (day < 10)
+        {
+            str += 0;
+        }
+        str += day;
+        
+        str += "T";
+        
+        final int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        if (hour < 10)
+        {
+            str += 0;
+        }
+        str += hour + ":";
+        
+        final int minute = calendar.get(Calendar.MINUTE);
+        if (minute < 10)
+        {
+            str += 0;
+        }
+        str += minute + ":";
+        
+        final int second = calendar.get(Calendar.SECOND);
+        if (second < 10)
+        {
+            str += 0;
+        }
+        str += second + ".";
+        
+        final int milli = calendar.get(Calendar.MILLISECOND);
+        str += milli;
+        
+        str += "Z";
+        
+        return str;
     }
 }
