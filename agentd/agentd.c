@@ -140,7 +140,7 @@ int parse_cmds(char *line, size_t sz, char ***argv)
 static int g_task_id = 1;
 
 #define CMD_MAX_SIZE 1024
-static void handle_socketio_func(int fd, unsigned events, void* cookie)
+static void handle_ctl_io(int fd, unsigned events, void* cookie)
 {
     LOG_FUNCTION_NAME
 
@@ -202,7 +202,7 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
     free(argv);
 }
 
-static void handle_connect_func(int fd, unsigned events, void* cookie)
+static void handle_ctl_connect(int fd, unsigned events, void* cookie)
 {
     LOG_FUNCTION_NAME
 
@@ -230,7 +230,7 @@ static void handle_connect_func(int fd, unsigned events, void* cookie)
     //fcntl(c->socket, F_SETFD, FD_CLOEXEC);
 
 
-    fdevent_install(&c->fde, s, handle_socketio_func, c);
+    fdevent_install(&c->fde, s, handle_ctl_io, c);
     fdevent_set(&c->fde, FDE_READ);
 
     /* make sure we don't close after fdevent_remove */
@@ -310,6 +310,7 @@ static void notify_clients(char *buf, size_t sz)
 {
     syslog_record record;
 
+    buf[sz] = 0;
     D("syslog: %s", buf);
     //parse_line(buf, &record);
     //dump_syslog_record(&record);
@@ -437,7 +438,7 @@ int main()
     /* make sure we don't close-on-exec */
     fcntl(daemon_fd, F_SETFD, 0);
 
-    fde = fdevent_create(daemon_fd, handle_connect_func, 0);
+    fde = fdevent_create(daemon_fd, handle_ctl_connect, 0);
     fdevent_set(fde, FDE_READ);
 
     fde = fdevent_create(logd_fd, handle_logger_func, 0);
