@@ -39,10 +39,6 @@ struct client* alloc_client()
     if (!c->name)
         return 0;
 
-    // initialize filters
-    list_init(&c->addrs);
-    list_init(&c->tags);
-
     return c;
 }
 
@@ -51,7 +47,6 @@ void destory_client(struct client *c)
     free(c);
 }
 
-
 void dump_client(struct client *c)
 {
     struct listnode *node;
@@ -59,19 +54,5 @@ void dump_client(struct client *c)
     D("    name   : %s\n"
         "    socket : %d",
             c->name, c->fde.fd);
-
-    // dump address filters
-    struct addr_filter *af;
-    list_for_each(node, &c->addrs) {
-        af = node_to_item(node, struct addr_filter, list);
-        D("    ip    : %s", inet_ntoa(af->addr));
-    }
-
-    // dump tag filters
-    struct tag_filter *tf;
-    list_for_each(node, &c->tags) {
-        tf = node_to_item(node, struct tag_filter, list);
-        D("    tag   : %s:%d", tf->tag, tf->priority);
-    }
 }
 

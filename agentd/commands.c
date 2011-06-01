@@ -33,6 +33,8 @@
 #include "log.h"
 #include "list.h"
 
+extern struct listnode clients;
+
 struct command* get_command(char *key)
 {
     LOG_FUNCTION_NAME
@@ -70,54 +72,6 @@ int cmd_list_func(struct client *client, int argc, char * const argv[])
     LOG_FUNCTION_NAME
 }
 
-int cmd_fltr_func(struct client *client, int argc, char * const argv[])
-{
-    LOG_FUNCTION_NAME
-
-    int opt;
-
-    client->flags |= CLIENT_MONITOR;
-
-    //TODO: reset_filter
-
-    struct addr_filter *af;
-    struct tag_filter *tf;
-
-    // reset getopt
-    // sems argv[argc] = 0 will not reset optind automatically
-    optind = 1;
-    while ((opt = getopt(argc, argv, "a:t:")) != -1) {
-        switch (opt) {
-            case 'a':
-                af = malloc(sizeof(struct addr_filter));
-                if (!af)
-                    return -ENOMEM;
-
-                if (inet_aton(optarg, &af->addr) < 0)
-                    return -EINVAL;
-
-                //TODO: find duplicate
-                list_add_tail(&client->addrs, &af->list);
-                break;
-
-            case 't':
-                //TODO: support priority
-
-                tf = malloc(sizeof(struct tag_filter));
-                if (!tf)
-                    return -ENOMEM;
-
-                memcpy(tf->tag, optarg, strlen(optarg));
-
-                //TODO: find duplicate
-                list_add_tail(&client->tags, &tf->list);
-                break;
-        }
-    }
-
-    dump_client(client);
-}
-
 int cmd_mute_func(struct client *client, int argc, char * const argv[])
 {
     LOG_FUNCTION_NAME
@@ -125,6 +79,8 @@ int cmd_mute_func(struct client *client, int argc, char * const argv[])
     client->flags &= ~CLIENT_MONITOR;
 }
 
+extern int cmd_fltr_func(struct client *client, int argc, char * const argv[]);
+// TODO: move into commands.h
 struct command commands[] = {
     { "HELP",     cmd_help_func,    "list available commands" },
     { "LIST",     cmd_list_func,    "list current connectd client" },

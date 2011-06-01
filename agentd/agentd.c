@@ -158,30 +158,31 @@ static void ctlsock_io_handler(int fd, unsigned events, void* cookie)
     char linebuf[CMD_MAX_SIZE];
     int sz;
 
-    // get client
+    /* get client */
     c = (struct client *)cookie;
 
     D("--- %s IO ---", c->name);
 
     sz = read(fd, linebuf, CMD_MAX_SIZE);
     if (sz == 0) {
+
         /* close by remote */
-        // TODO: check all services under client, and destroy client
-        D("--- %s IO CLOSE ---", c->name);
+        /* TODO: check all services under client, and destroy client */
         fdevent_remove(&c->fde);
         list_remove(&c->clist);
-        dump_clients();
+
         return;
     } else if (sz < 0) {
-        perror("read");
+
+        E("read error, %s", strerror(errno));
         return;
-    } else {
-        //D("recv %d bytes from remote", sz);
     }
 
+#if DEBUG == 1
     hexdump(linebuf, sz);
+#endif
 
-    // parse linebuf, and get command need invoked
+    /* parse linebuf, and get command need invoked */
     argc = parse_cmds(linebuf, sz, &argv);
     if (!argc) {
         write(fd, "FAIL:0:protocol error\n", 22);
@@ -194,14 +195,17 @@ static void ctlsock_io_handler(int fd, unsigned events, void* cookie)
         return;
     }
 
-    // command accepted
+    /* Setup running command */
+    c->running_command.cmd = cmd;
+
+    /* command is accepted */
     sz = sprintf(linebuf, "OKAY\n");
     write(fd, linebuf, sz);
 
-    // invoke
+    /* invoke the command */
     cmd->func(c, argc, argv);
 
-    // free argv
+    /* release argv */
     int i;
     for (i = 0; i < argc; i++)
         free(argv[i]);
@@ -231,10 +235,11 @@ static void ctlsock_connect_handler(int fd, unsigned events, void* cookie)
         free(c);
         return;
     }
-    D("%s:%d connected\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
     c->ip.s_addr = sin.sin_addr.s_addr;
-    sprintf(c->name, "%d", ntohs(sin.sin_port));
+    sprintf(c->name, "%s:%d", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
+
+    D("%s connected", c->name);
 
     /* Setup features of client side control socket. */
     fcntl(s, F_SETFL, O_NONBLOCK);
