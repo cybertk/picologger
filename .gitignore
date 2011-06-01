@@ -2,7 +2,6 @@
 *.o
 
 # syslog collector
-agentd
 
 # used by amrnb_decoder
 _amr_tmp
