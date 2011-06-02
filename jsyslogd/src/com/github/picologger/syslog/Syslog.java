@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2011 cybertk
  *
- * -- https://github.com/kyan-he/picologger/raw/master/j2me/com/github/picologger/Log.java --
+ * -- https://github.com/kyan-he/picologger/raw/master/jsyslogd/src/com/github/picologger/syslog/Syslog.java --
  * 
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
