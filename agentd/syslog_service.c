@@ -69,14 +69,29 @@ static int filter_match(struct listnode *filters, syslog_record *log)
     return 0;
 }
 
-static void notify_clients(char *buf, size_t sz)
+/**
+ *
+ * @param from
+ *      Ip address of the log sender.
+ */
+static void notify_clients(char *from, char *buf, size_t sz)
 {
     syslog_record r;
 
-    buf[sz] = 0;
     //D("syslog: %s", buf);
 
+    buf[sz] = 0;
     syslog_parse(buf, sz, &r);
+
+    char *syslog = buf;
+
+    if (!strcmp(r.hostname, "picologger_server")) {
+        D("update hostname");
+        r.hostname = from;
+
+        // TODO:
+        //syslog = syslog_encode();
+    }
 
     /* notify clients */
     struct listnode *node;
@@ -122,7 +137,7 @@ static void syslog_sock_handler(int fd, unsigned events, void* cookie)
         //D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
 
         // Relay to clients.
-        notify_clients(buf, sz);
+        notify_clients(inet_ntoa(sa.sin_addr), buf, sz);
     }
 }
 
