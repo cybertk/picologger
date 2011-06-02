@@ -1,3 +1,20 @@
+/*
+ * Copyright (C) 2011 cybertk
+ *
+ * -- https://github.com/kyan-he/picologger/raw/master/j2me/com/github/picologger/Log.java --
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.picologger.syslog;
 
 import java.util.Calendar;
@@ -6,7 +23,7 @@ import java.util.Date;
 /**
  * Implement RFC5424 and RFC3164
  * 
- * @author kyanhe
+ * @author cybertk
  * 
  */
 public class Syslog
@@ -34,6 +51,26 @@ public class Syslog
     
     // Indicates this is RFC3164 or RFC5424
     private boolean bsd;
+    
+    public Syslog()
+    {
+        // Local use 0 (local0).
+        facility = 16;
+        
+        // Debug.
+        severity = 7;
+        
+        // RFC Specified.
+        version = 1;
+        timestamp = "-";
+        hostname = "-";
+        appname = "-";
+        procid = "-";
+        msgid = "-";
+        sd = "-";
+        msg = "";
+        
+    }
     
     public int getFacility()
     {
@@ -135,31 +172,6 @@ public class Syslog
         this.msg = msg;
     }
     
-    public Syslog(String record)
-    {
-        decode(record);
-    }
-    
-    public Syslog()
-    {
-        // Local use 0 (local0).
-        facility = 16;
-        
-        // Debug.
-        severity = 7;
-        
-        // RFC Specified.
-        version = 1;
-        timestamp = "-";
-        hostname = "-";
-        appname = "-";
-        procid = "-";
-        msgid = "-";
-        sd = "-";
-        msg = "";
-        
-    }
-    
     public String encode()
     {
         String str = "";
@@ -200,137 +212,6 @@ public class Syslog
         str += "msgid: " + msgid + "\n";
         str += "sd: " + sd + "\n";
         str += "msg: " + msg + "\n";
-        
-        return str;
-    }
-    
-    private void decode(String record) throws IllegalArgumentException
-    {
-        /*
-        int pos0 = 0;
-        int pos = 0;
-        
-        // Validate format.
-        pos = record.indexOf('>');
-        if (record.charAt(0) != '<' || pos > 4)
-        {
-            throw new IllegalArgumentException("Malformed syslog record.");
-        }
-        
-        // Parse Header.
-        
-        // Parse facility and severity.
-        int pri = Integer.parseInt((record.substring(1, pos)));
-        facility = pri >> 3;
-        severity = pri & 0x7;
-        
-        // Parse Version.
-        ++pos;
-        version = record.charAt(pos) - 0x30;
-        
-        String[] token = record.split(" ", 7);
-        
-        timestamp = token[1];
-        hostname = token[2];
-        appname = token[3];
-        procid = token[4];
-        msgid = token[5];
-        
-        // Parse SD
-        if (token[6].charAt(0) == '[')
-        {
-            while (true)
-            {
-                pos0 = token[6].indexOf(']', pos0);
-                if (pos0 == -1)
-                {
-                    break;
-                }
-                
-                ++pos0;
-                
-                // Record the index.
-                if (token[6].charAt(pos0 - 2) != '\\')
-                {
-                    // Make sure it's not a escaped "]".
-                    pos = pos0;
-                }
-            }
-        }
-        else
-        {
-            // NILVAULE, "-".
-            
-            pos = 1;
-        }
-        sd = token[6].substring(0, pos);
-        
-        // Parse message.
-        if (pos > token[6].length())
-        {
-            msg = token[6].substring(pos + 1);
-        }
-        else
-        {
-            msg = "";
-        }
-        */
-    }
-    
-    String currentTimestamp()
-    {
-        // Add the TIMESTAMP field of the HEADER
-        // Time format is "Mmm dd hh:mm:ss". For more info see rfc3164.
-        
-        Calendar calendar = Calendar.getInstance();
-        
-        long currentTime = System.currentTimeMillis();
-        calendar.setTime(new Date(currentTime));
-        
-        String str = "";
-        str += calendar.get(Calendar.YEAR) + "-";
-        
-        final int month = calendar.get(Calendar.MONTH) + 1;
-        if (month < 10)
-        {
-            str += 0;
-        }
-        str += month + "-";
-        
-        final int day = calendar.get(Calendar.DAY_OF_MONTH);
-        if (day < 10)
-        {
-            str += 0;
-        }
-        str += day;
-        
-        str += "T";
-        
-        final int hour = calendar.get(Calendar.HOUR_OF_DAY);
-        if (hour < 10)
-        {
-            str += 0;
-        }
-        str += hour + ":";
-        
-        final int minute = calendar.get(Calendar.MINUTE);
-        if (minute < 10)
-        {
-            str += 0;
-        }
-        str += minute + ":";
-        
-        final int second = calendar.get(Calendar.SECOND);
-        if (second < 10)
-        {
-            str += 0;
-        }
-        str += second + ".";
-        
-        final int milli = calendar.get(Calendar.MILLISECOND);
-        str += milli;
-        
-        str += "Z";
         
         return str;
     }
