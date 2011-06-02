@@ -80,10 +80,13 @@ int cmd_mute_func(struct client *client, int argc, char * const argv[])
 }
 
 extern int cmd_fltr_func(struct client *client, int argc, char * const argv[]);
+
+extern int cmd_shel_func(struct client *client, int argc, char * const argv[]);
+
 // TODO: move into commands.h
 struct command commands[] = {
     { "HELP",     cmd_help_func,    "list available commands" },
-    { "LIST",     cmd_list_func,    "list current connectd client" },
+    { "SHELL",    cmd_shel_func,    "shell" },
     { "FLTR",     cmd_fltr_func,    "set filter"          },
     { "MUTE",     cmd_mute_func,    "disable log fowarding"          },
     { 0, 0, 0 }

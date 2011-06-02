@@ -74,7 +74,7 @@ static void notify_clients(char *buf, size_t sz)
     syslog_record r;
 
     buf[sz] = 0;
-    D("syslog: %s", buf);
+    //D("syslog: %s", buf);
 
     syslog_parse(buf, sz, &r);
 
