@@ -28,9 +28,9 @@ import javax.microedition.io.DatagramConnection;
 
 import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
-import net.rim.device.api.util.Arrays;
 
 import com.github.picologger.syslog.Syslog;
+import com.github.picologger.syslog.Timestamp;
 
 /**
  * API for sending log output.
@@ -234,6 +234,11 @@ public abstract class Log
     
     private static LogWritter sWritter;
     
+    /**
+     * Server will translate to real device ip.
+     */
+    private static String HOSTNAME = "picologger_server";
+    
     static
     {
         sQueue = new LogQueue(1000);
@@ -242,11 +247,14 @@ public abstract class Log
         sWritter.start();
     }
     
+    
     private static int log(int bufID, int priority, String tag, String msg)
     {
         Syslog log = new Syslog();
+        log.setTimestamp(Timestamp.currentTimestamp());
+        log.setHostname(HOSTNAME);
         log.setFacility(priority);
-        log.setAppname(tag);
+        log.setProcid(tag);
         log.setMsg(msg);
         sQueue.push(log);
         
@@ -324,7 +332,7 @@ public abstract class Log
     static class LogWritter extends Thread
     {
         
-        private String logdUri = "datagram://10.60.5.62:20505";
+        private String logdUri = "datagram://10.60.5.62:10505";
         
         final private LogQueue mQueue;
         
