@@ -28,30 +28,25 @@
 #include "list.h"
 #include "fdevent.h"
 
-// address filter
-struct addr_filter {
-    struct listnode list;
-    struct in_addr addr;
-};
+struct running_command {
 
-#define TAG_MAX_LENGTH 16
-// tag filter
-struct tag_filter {
-    struct listnode list;
-    char tag[TAG_MAX_LENGTH];
-    int priority;
+    /* Should point to commands */
+    struct command *cmd;
+
+    /* command specific data */
+    void *cookie;
 };
 
 struct client {
-    // list of all clients
-    struct listnode clist;
 
+    /* Client name. */
     char *name;
 
-    // list of all address filters
-    struct listnode addrs;
-    // list of all tag filters
-    struct listnode tags;
+    /* List of all clients. */
+    struct listnode clist;
+
+    /* Command running */
+    struct running_command running_command;
 
     struct in_addr ip;
 

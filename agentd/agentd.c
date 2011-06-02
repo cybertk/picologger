@@ -46,7 +46,10 @@
 
 list_declare(clients);
 
-//extern struct command commands[];
+#if 0
+extern struct command commands[];
+#endif
+
 /* used to communicate with child */
 static int signal_fd = -1;
 
@@ -73,7 +76,7 @@ static void dump_clients(void)
 //TODO: rm
 //TODO: performance, optimize
 // return argc
-int parse_cmds(char *line, size_t sz, char ***argv)
+static int parse_cmds(char *line, size_t sz, char ***argv)
 {
     LOG_FUNCTION_NAME
 
@@ -137,10 +140,13 @@ int parse_cmds(char *line, size_t sz, char ***argv)
     return nargs;
 }
 
-static int g_task_id = 1;
+static void srvsock_io_handler(int fd, unsigned events, void* cookie)
+{
+    /* pass */
+}
 
 #define CMD_MAX_SIZE 1024
-static void handle_socketio_func(int fd, unsigned events, void* cookie)
+static void ctlsock_io_handler(int fd, unsigned events, void* cookie)
 {
     LOG_FUNCTION_NAME
 
@@ -152,30 +158,31 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
     char linebuf[CMD_MAX_SIZE];
     int sz;
 
-    // get client
+    /* get client */
     c = (struct client *)cookie;
 
     D("--- %s IO ---", c->name);
 
     sz = read(fd, linebuf, CMD_MAX_SIZE);
     if (sz == 0) {
+
         /* close by remote */
-        // TODO: check all services under client, and destroy client
-        D("--- %s IO CLOSE ---", c->name);
+        /* TODO: check all services under client, and destroy client */
         fdevent_remove(&c->fde);
         list_remove(&c->clist);
-        dump_clients();
+
         return;
     } else if (sz < 0) {
-        perror("read");
+
+        E("read error, %s", strerror(errno));
         return;
-    } else {
-        //D("recv %d bytes from remote", sz);
     }
 
+#if DEBUG == 1
     hexdump(linebuf, sz);
+#endif
 
-    // parse linebuf, and get command need invoked
+    /* parse linebuf, and get command need invoked */
     argc = parse_cmds(linebuf, sz, &argv);
     if (!argc) {
         write(fd, "FAIL:0:protocol error\n", 22);
@@ -188,212 +195,80 @@ static void handle_socketio_func(int fd, unsigned events, void* cookie)
         return;
     }
 
-    // command accepted
+    /* Setup running command */
+    c->running_command.cmd = cmd;
+
+    /* command is accepted */
     sz = sprintf(linebuf, "OKAY\n");
     write(fd, linebuf, sz);
 
-    // invoke
+    /* invoke the command */
     cmd->func(c, argc, argv);
 
-    // free argv
+    /* release argv */
     int i;
     for (i = 0; i < argc; i++)
         free(argv[i]);
     free(argv);
 }
 
-static void handle_connect_func(int fd, unsigned events, void* cookie)
+/**
+ * Handle the connect logic of control socket(daemonfd).
+ */
+static void ctlsock_connect_handler(int fd, unsigned events, void* cookie)
 {
     LOG_FUNCTION_NAME
 
     struct sockaddr_in sin;
-    socklen_t slen;
+    socklen_t slen = sizeof(sin);
     int s;
 
+    /* Alloc new client. */
     struct client *c = alloc_client();
     if (!c)
         return;
 
-    slen = sizeof(sin);
+    /* Accept the client's connect, this is not a blocking call. */
     s = accept(fd, (struct sockaddr *)&sin, &slen);
     if (s < 0) {
         E("accept error, %s", strerror(errno));
         free(c);
         return;
     }
-    D("%s:%d connected\n", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
     c->ip.s_addr = sin.sin_addr.s_addr;
-    sprintf(c->name, "%d", ntohs(sin.sin_port));
+    sprintf(c->name, "%s:%d", inet_ntoa(sin.sin_addr), ntohs(sin.sin_port));
 
+    D("%s connected", c->name);
+
+    /* Setup features of client side control socket. */
     fcntl(s, F_SETFL, O_NONBLOCK);
-    //fcntl(c->socket, F_SETFD, FD_CLOEXEC);
+#if 0
+    fcntl(c->socket, F_SETFD, FD_CLOEXEC);
+#endif
 
-
-    fdevent_install(&c->fde, s, handle_socketio_func, c);
+    /* Add socket to fdevent loop. */
+    fdevent_install(&c->fde, s, ctlsock_io_handler, c);
     fdevent_set(&c->fde, FDE_READ);
 
-    /* make sure we don't close after fdevent_remove */
+    /* make sure we don't close after fdevent_remove. */
     fdevent_add(&c->fde, FDE_DONT_CLOSE);
 
+    /* Add this client to list. */
     list_add_tail(&clients, &c->clist);
     dump_clients();
 }
 
-struct log_record {
-    struct in_addr from;
-    struct timeval ts;
-    int priority;
-    int size;
-    char tag[];
-};
-
-// check whether current log'address match client's filter, 1 for ture
-static int addr_match(struct client *c, struct in_addr *in)
-{
-    LOG_FUNCTION_NAME
-
-    struct listnode *node;
-    struct addr_filter *af;
-
-    // match all if not filter set
-    if (list_empty(&c->addrs))
-        return 1;
-
-    // match address
-    list_for_each(node, &c->addrs) {
-        af = node_to_item(node, struct addr_filter, list);
-
-        if (af->addr.s_addr == in->s_addr) {
-            D("address match");
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-// check whether current log'tag match client's filter, 1 for ture
-static int tag_match(struct client *c, const char *tag, int priority)
-{
-    LOG_FUNCTION_NAME
-
-    struct listnode *node;
-    struct tag_filter *tf;
-
-    // match all if not filter set
-    if (list_empty(&c->tags))
-        return 1;
-
-    // match tags
-    list_for_each(node, &c->tags) {
-        tf = node_to_item(node, struct tag_filter, list);
-
-        if ((priority >= tf->priority) && !(strcmp(tag, tf->tag))) {
-            D("tag match");
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-// check whether current log match client's filter, 1 for ture
-static int filter_match(struct client *c, struct log_record *l)
-{
-    LOG_FUNCTION_NAME
-
-    return addr_match(c, &l->from) && tag_match(c, l->tag, ntohl(l->priority));
-}
-
-static void notify_clients(char *buf, size_t sz)
-{
-    syslog_record record;
-
-    D("syslog: %s", buf);
-    //parse_line(buf, &record);
-    //dump_syslog_record(&record);
-
-    /* notify clients */
-    struct listnode *node;
-    struct client *c;
-    list_for_each(node, &clients) {
-        c = node_to_item(node, struct client, clist);
-        //if (c->flags & CLIENT_MONITOR && filter_match(c, l)) {
-        // TODO: Notify clients according to filtes.
-        if (c->flags & CLIENT_MONITOR) {
-
-            D("nofity client %s", c->name);
-            write(c->fde.fd, buf, sz);
-        }
-    }
-}
-
-//TODO: re-calculate
-#define LOGD_MAX_PACKET_SZ 1200
-static void handle_logger_func(int fd, unsigned events, void* cookie)
-{
-    LOG_FUNCTION_NAME
-
-    char buf[LOGD_MAX_PACKET_SZ];
-    int sz;
-    struct sockaddr_in sa;
-    int x = sizeof(sa);
-
-    //sz = read(fd, buf, LOGD_MAX_PACKET_SZ);
-    sz = recvfrom(fd, buf, LOGD_MAX_PACKET_SZ, 0,
-            (struct sockaddr *)&sa, &x);
-
-    if (sz == 0) {
-        /* Close by remote */
-        // TODO: check all services under client, and destroy client
-        D("--- logger IO CLOSE ---");
-        return;
-    } else if (sz < 0) {
-        perror("read");
-        return;
-    } else {
-        //D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
-
-        // Relay to clients.
-        notify_clients(buf, sz);
-    }
-}
-
-static void handle_sigchld_func(int fd, unsigned events, void* cookie)
-{
-    LOG_FUNCTION_NAME
-
-    pid_t pid;
-    int status;
-    char tmp[1024];
-
-    read(fd, tmp, 1024);
-
-    while ( (pid = waitpid(-1, &status, WNOHANG)) == -1 && errno == EINTR);
-    if (pid <= 0) {
-        D("watpid error");
-        return;
-    }
-
-    D("waitpid returned pid %d, status=%08x", pid, status);
-
-}
-
-#define LOGD_PORT           20505
-#define LOGD_SOCKET_PATH    "syslog-relay"
-#define AGENTD_PORT         LOGD_PORT
+/* Name derived from 2011-05-04, which is start time of this project. */
+#define AGENTD_PORT         10504
 
 int main()
 {
     int daemon_fd;
-    int logd_fd;
-    int relay_fd;
     int signal_recv_fd;
     int fd_count;
     int s[2];
-    struct pollfd ufds[2];
-    struct sigaction act; 
+    struct sigaction act;
     struct fdevent *fde;
 
     /* setup SIGCHLD handler */
@@ -409,12 +284,6 @@ int main()
     /* init agent socket */
     daemon_fd = local_socket(AGENTD_PORT);
 
-    /* init logd datagram */
-    logd_fd = local_datagram(LOGD_PORT);
-
-    /* init syslog relay unix datagram */
-    relay_fd = unix_datagram_server(LOGD_SOCKET_PATH);
-
     /* create a mechansim for sigchld handler */
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == 0) {
         signal_fd = s[0];
@@ -427,8 +296,6 @@ int main()
 
     /* make sure we are ready */
     if ((daemon_fd < 0) ||
-        (logd_fd < 0) ||
-        (relay_fd < 0) ||
         (signal_recv_fd < 0)) {
         E("init failture");
         exit(1);
@@ -437,20 +304,14 @@ int main()
     /* make sure we don't close-on-exec */
     fcntl(daemon_fd, F_SETFD, 0);
 
-    fde = fdevent_create(daemon_fd, handle_connect_func, 0);
+    fde = fdevent_create(daemon_fd, ctlsock_connect_handler, 0);
     fdevent_set(fde, FDE_READ);
 
-    fde = fdevent_create(logd_fd, handle_logger_func, 0);
-    fdevent_set(fde, FDE_READ);
-
-    fde = fdevent_create(relay_fd, handle_logger_func, 0);
-    fdevent_set(fde, FDE_READ);
-
-    fde = fdevent_create(signal_recv_fd, handle_sigchld_func, 0);
+    fde = fdevent_create(signal_recv_fd, sigchld_handler, 0);
     fdevent_set(fde, FDE_READ);
 
     D("agentd start");
-    /* loop */
+    /* main loop */
     fdevent_loop();
 
     D("agentd exit");
