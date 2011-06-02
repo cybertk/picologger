@@ -33,10 +33,21 @@
 
 #define SP   ' '
 
+
+/**
+ * Returns syslog message.
+ */
+char* encode(syslog_record *record)
+{
+    /*TODO: Implement*/
+
+    return 0;
+}
+
 /**
  * strtok() will cause SIGSEGV
  */
-char *parse_token(const char *s, char token, char** saved)
+char* parse_token(const char *s, char token, char** saved)
 {
     char *pos, *pos0;
 
