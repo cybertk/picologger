@@ -17,8 +17,6 @@
  */
 package com.github.picologger.syslog;
 
-import java.util.Calendar;
-import java.util.Date;
 
 /**
  * Implement RFC5424 and RFC3164
