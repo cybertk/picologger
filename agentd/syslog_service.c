@@ -48,40 +48,35 @@ struct syslog_filter {
  *
  * Returns 1 if given syslog passed the filter.
  */
-static int filter_match(struct client *c, syslog_record log)
+static int filter_match(struct listnode *filters, syslog_record *log)
 {
     LOG_FUNCTION_NAME
 
-    /*
     struct listnode *node;
-    struct addr_filter *af;
+    struct syslog_filter *f;
+    list_for_each(node, filters) {
 
-    // match all if not filter set
-    if (list_empty(&c->addrs))
-        return 1;
+        f = node_to_item(node, struct syslog_filter, list);
 
-    // match address
-    list_for_each(node, &c->addrs) {
-        af = node_to_item(node, struct addr_filter, list);
-
-        if (af->addr.s_addr == in->s_addr) {
-            D("address match");
+        /* TODO: match all components */
+        char *hostname = f->filter.hostname;
+        if (hostname && !strcmp(hostname, log->hostname)) {
             return 1;
         }
+
     }
-    */
 
     return 0;
 }
 
 static void notify_clients(char *buf, size_t sz)
 {
-    syslog_record record;
+    syslog_record r;
 
     buf[sz] = 0;
     D("syslog: %s", buf);
-    //parse_line(buf, &record);
-    //dump_syslog_record(&record);
+
+    syslog_parse(buf, sz, &r);
 
     /* notify clients */
     struct listnode *node;
@@ -90,7 +85,9 @@ static void notify_clients(char *buf, size_t sz)
         c = node_to_item(node, struct client, clist);
         //if (c->flags & CLIENT_MONITOR && filter_match(c, l)) {
         // TODO: Notify clients according to filtes.
-        if (c->flags & CLIENT_MONITOR) {
+        if ((c->running_command.cmd == get_command("FLTR"))
+                && filter_match(
+                    (struct listnode *) c->running_command.cookie, &r)) {
 
             D("nofity client %s", c->name);
             write(c->fde.fd, buf, sz);
@@ -171,6 +168,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
     list_for_each(node, &clients) {
         c = node_to_item(node, struct client, clist);
 
+        /* TODO: If the same client send FLTR more than one time, 
+         * the syslog server will start every time. */
         if ((c->running_command.cmd == get_command("FLTR"))
                 && c != client)
             service_found = 1;
@@ -184,6 +183,7 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
 
 
     /* Init filter list. */
+    /* TODO: use syslog_filter as list head? */
     struct listnode *filters = malloc(sizeof(*filters));
     if (!filters)
         return -ENOMEM;
