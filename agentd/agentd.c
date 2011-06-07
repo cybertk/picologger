@@ -174,7 +174,7 @@ static void ctlsock_io_handler(int fd, unsigned events, void* cookie)
         return;
     } else if (sz < 0) {
 
-        E("read error, %s", strerror(errno));
+        D("read error, %s", strerror(errno));
         return;
     }
 

@@ -86,7 +86,6 @@ static void notify_clients(char *from, char *buf, size_t sz)
     char *syslog = buf;
 
     if (!strcmp(r.hostname, "picologger_server")) {
-        D("update hostname");
         r.hostname = from;
 
         // TODO:
