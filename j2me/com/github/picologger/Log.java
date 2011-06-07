@@ -30,6 +30,7 @@ import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
 
 import com.github.picologger.syslog.Syslog;
+import com.github.picologger.syslog.Timestamp;
 
 /**
  * API for sending log output.
@@ -233,6 +234,11 @@ public abstract class Log
     
     private static LogWritter sWritter;
     
+    /**
+     * Server will translate to real device ip.
+     */
+    private static String HOSTNAME = "picologger_server";
+    
     static
     {
         sQueue = new LogQueue(1000);
@@ -241,11 +247,14 @@ public abstract class Log
         sWritter.start();
     }
     
+    
     private static int log(int bufID, int priority, String tag, String msg)
     {
         Syslog log = new Syslog();
+        log.setTimestamp(Timestamp.currentTimestamp());
+        log.setHostname(HOSTNAME);
         log.setFacility(priority);
-        log.setAppname(tag);
+        log.setProcid(tag);
         log.setMsg(msg);
         sQueue.push(log);
         
@@ -278,7 +287,6 @@ public abstract class Log
          */
         public void push(Syslog log)
         {
-            
             if (mQueue.size() == mQueueMaxSize)
             {
                 // Queue overflow, drop the log.
@@ -286,6 +294,7 @@ public abstract class Log
                 return;
             }
             
+            // TODO: The system will hang, if the push is called in high-frequency.
             // TODO: We do not want acquire a mutex-lock.
             synchronized (mQueue)
             {
@@ -297,7 +306,7 @@ public abstract class Log
         /**
          * TODO: return more than one records. Returns one log record.
          */
-        public Syslog pop()
+        public Syslog[] pop()
         {
             
             synchronized (mQueue)
@@ -311,10 +320,11 @@ public abstract class Log
                     // hmm...
                 }
                 
-                Syslog log = (Syslog) mQueue.firstElement();
-                mQueue.removeElementAt(0);
+                Syslog[] logs = new Syslog[mQueue.size()];
+                mQueue.copyInto(logs);
+                reset();
                 
-                return log;
+                return logs;
             }
         }
     }
@@ -322,7 +332,7 @@ public abstract class Log
     static class LogWritter extends Thread
     {
         
-        private String logdUri = "datagram://10.60.5.62:20505";
+        private String logdUri = "datagram://10.60.5.62:10505";
         
         final private LogQueue mQueue;
         
@@ -353,20 +363,40 @@ public abstract class Log
         {
             for (;;)
             {
-                Syslog log = mQueue.pop();
-                push(log);
+                Syslog[] logs = mQueue.pop();
+                push(logs);
             }
         }
         
-        private void push(Syslog log)
+        private void push(Syslog[] logs)
         {
             
             Datagram dg;
+            String data = "";
             try
             {
-                String raw = log.encode();
-                dg = mConnection.newDatagram(raw.getBytes(),
-                        raw.length(),
+                for (int i = 0; i < logs.length; i++)
+                {
+                    
+                    String raw = logs[i].encode();
+                    
+                    if (data.length() + raw.length() > 1000)
+                    {
+                        dg = mConnection.newDatagram(data.getBytes(),
+                                data.length(),
+                                logdUri);
+                        mConnection.send(dg);
+                        
+                        // Reset buffer.
+                        data = "";
+                    }
+                    
+                    data += raw + "\n";
+                }
+                
+                // Send the last packet.
+                dg = mConnection.newDatagram(data.getBytes(),
+                        data.length(),
                         logdUri);
                 mConnection.send(dg);
             }
@@ -374,6 +404,7 @@ public abstract class Log
             {
                 // ahh...
             }
+            
         }
     }
 }
