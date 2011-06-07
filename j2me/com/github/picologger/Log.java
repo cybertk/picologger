@@ -25,9 +25,11 @@ import java.util.Vector;
 import javax.microedition.io.Connector;
 import javax.microedition.io.Datagram;
 import javax.microedition.io.DatagramConnection;
+import javax.microedition.io.SocketConnection;
 
 import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
+import net.rim.device.api.system.WLANInfo;
 
 import com.github.picologger.syslog.Syslog;
 import com.github.picologger.syslog.Timestamp;
@@ -237,22 +239,60 @@ public abstract class Log
     /**
      * Server will translate to real device ip.
      */
-    private static String HOSTNAME = "picologger_server";
+    final private static String DEFAULT_HOSTNAME = "picologger_server";
+    
+    private static String sHostname;
     
     static
     {
+        sHostname = getHostname();
+        if (null == sHostname)
+        {
+            sHostname = DEFAULT_HOSTNAME;
+        }
+        
         sQueue = new LogQueue(1000);
         
         sWritter = new LogWritter(sQueue);
         sWritter.start();
     }
     
+    public static String getHostname()
+    {
+        String localAddr = null;
+        SocketConnection conn = null;
+        
+        try
+        {
+            conn = (SocketConnection) Connector.open("socket://www.google.com:80");
+            localAddr = conn.getLocalAddress();
+        }
+        catch (Throwable e)
+        {
+        }
+        finally
+        {
+            if (null != conn)
+            {
+                try
+                {
+                    conn.close();
+                }
+                catch (IOException e)
+                {
+                    
+                }
+            }
+        }
+        
+        return localAddr;
+    }
     
     private static int log(int bufID, int priority, String tag, String msg)
     {
         Syslog log = new Syslog();
         log.setTimestamp(Timestamp.currentTimestamp());
-        log.setHostname(HOSTNAME);
+        log.setHostname(sHostname);
         log.setFacility(priority);
         log.setProcid(tag);
         log.setMsg(msg);
