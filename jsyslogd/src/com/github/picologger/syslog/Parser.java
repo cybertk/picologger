@@ -22,6 +22,10 @@ public abstract class Parser
     
     public static Syslog parse(String record) throws IllegalArgumentException
     {
+        if (null == record) {
+            throw new IllegalArgumentException("no record.");
+        }
+        
         Syslog log = new Syslog();
         int pos0 = 0;
         int pos = 0;
