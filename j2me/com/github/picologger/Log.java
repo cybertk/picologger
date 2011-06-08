@@ -25,6 +25,7 @@ import java.util.Vector;
 import javax.microedition.io.Connector;
 import javax.microedition.io.Datagram;
 import javax.microedition.io.DatagramConnection;
+import javax.microedition.io.SocketConnection;
 
 import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
@@ -73,39 +74,34 @@ public abstract class Log
 {
     
     /**
-     * Priority constant for the println method; use Log.v.
+     * Priority constant for the log method; use Log.v.
      */
     public static final int VERBOSE = 2;
     
     /**
-     * Priority constant for the println method; use Log.d.
+     * Priority constant for the log method; use Log.d.
      */
     public static final int DEBUG = 3;
     
     /**
-     * Priority constant for the println method; use Log.i.
+     * Priority constant for the log method; use Log.i.
      */
     public static final int INFO = 4;
     
     /**
-     * Priority constant for the println method; use Log.w.
+     * Priority constant for the log method; use Log.w.
      */
     public static final int WARN = 5;
     
     /**
-     * Priority constant for the println method; use Log.e.
+     * Priority constant for the log method; use Log.e.
      */
     public static final int ERROR = 6;
     
     /**
-     * Priority constant for the println method.
+     * Priority constant for the log method.
      */
     public static final int ASSERT = 7;
-    
-    private Log()
-    {
-        
-    }
     
     /**
      * Send a {@link #VERBOSE} log message.
@@ -164,8 +160,8 @@ public abstract class Log
     }
     
     /**
-     * Checks to see whether or not a log for the specified tag is loggable at
-     * the specified level.
+     * TODO: Checks to see whether or not a log for the specified tag is
+     * loggable at the specified level.
      * 
      * The default level of any tag is set to INFO. This means that any level
      * above and including INFO will be logged. Before you make any calls to a
@@ -201,23 +197,6 @@ public abstract class Log
         return log(LOG_ID_MAIN, ERROR, tag, msg);
     }
     
-    /**
-     * Low-level logging call.
-     * 
-     * @param priority
-     *            The priority/type of this log message
-     * @param tag
-     *            Used to identify the source of a log message. It usually
-     *            identifies the class or activity where the log call occurs.
-     * @param msg
-     *            The message you would like logged.
-     * @return The number of bytes written.
-     */
-    public static int println(int priority, String tag, String msg)
-    {
-        return log(LOG_ID_MAIN, priority, tag, msg);
-    }
-    
     /** @hide */
     public static final int LOG_ID_MAIN = 0;
     
@@ -230,32 +209,133 @@ public abstract class Log
     /** @hide */
     public static final int LOG_ID_SYSTEM = 3;
     
+    /**
+     * Logging Queue.
+     */
     private static LogQueue sQueue;
     
-    private static LogWritter sWritter;
+    /**
+     * Log dumper.
+     */
+    private static LogForwarder sForwarder;
+    
+    /**
+     * Log writer.
+     */
+    private static UdpWritter sWritter;
     
     /**
      * Server will translate to real device ip.
      */
-    private static String HOSTNAME = "picologger_server";
+    final private static String DEFAULT_HOSTNAME = "picologger_server";
     
+    /**
+     * Host name.
+     */
+    private static String sHostname;
+    
+    // Init.
     static
     {
+        // Init hostname.
+        sHostname = getHostname();
+        if (null == sHostname)
+        {
+            sHostname = DEFAULT_HOSTNAME;
+        }
+        
+        // Init queue.
         sQueue = new LogQueue(1000);
         
-        sWritter = new LogWritter(sQueue);
-        sWritter.start();
+        try
+        {
+            // Init writter.
+            sWritter = new UdpWritter("10.60.5.62", 10505);
+            
+            // Init Forwarder if we have initialized the writter.
+            sForwarder = new LogForwarder(sQueue, sWritter);
+            sForwarder.start();
+        }
+        catch (IOException e)
+        {
+            // Release the resource we hold.
+            sHostname = null;
+            sQueue = null;
+            sWritter = null;
+        }
+        
     }
     
+    /**
+     * Returns the local IP address.
+     */
+    private static String getHostname()
+    {
+        String localAddr = null;
+        SocketConnection conn = null;
+        
+        try
+        {
+            conn = (SocketConnection) Connector.open("socket://www.google.com:80");
+            localAddr = conn.getLocalAddress();
+        }
+        catch (Throwable e)
+        {
+        }
+        finally
+        {
+            if (null != conn)
+            {
+                try
+                {
+                    conn.close();
+                }
+                catch (IOException e)
+                {
+                    
+                }
+            }
+        }
+        
+        return localAddr;
+    }
+    
+    /**
+     * Low-level logging call.
+     * 
+     * @param priority
+     *            The priority/type of this log message
+     * @param tag
+     *            Used to identify the source of a log message. It usually
+     *            identifies the class or activity where the log call occurs.
+     * @param msg
+     *            The message you would like logged.
+     * @return The number of bytes written.
+     */
+    private static int log(int priority, String tag, String msg)
+    {
+        return log(LOG_ID_MAIN, priority, tag, msg);
+    }
     
     private static int log(int bufID, int priority, String tag, String msg)
     {
+        
+        if (null == sQueue)
+        {
+            // We failed on init.
+            
+            System.out.println("<" + priority + "> " + tag + ": " + msg);
+        }
+        
+        // Setup Syslog.
         Syslog log = new Syslog();
         log.setTimestamp(Timestamp.currentTimestamp());
-        log.setHostname(HOSTNAME);
+        log.setHostname(sHostname);
         log.setFacility(priority);
         log.setProcid(tag);
         log.setMsg(msg);
+        
+        // Push to queue.
         sQueue.push(log);
         
         return 0;
@@ -304,11 +384,10 @@ public abstract class Log
         }
         
         /**
-         * TODO: return more than one records. Returns one log record.
+         * Returns more than one records.
          */
         public Syslog[] pop()
         {
-            
             synchronized (mQueue)
             {
                 try
@@ -329,46 +408,38 @@ public abstract class Log
         }
     }
     
-    static class LogWritter extends Thread
+    //TODO: Define and implement a log writter interface.
+    static class UdpWritter
     {
+        private static final int MAX_PAYLOAD_SIZE = 1000;
         
-        private String logdUri = "datagram://10.60.5.62:10505";
-        
-        final private LogQueue mQueue;
+        /**
+         * Syslog server address.
+         */
+        private String mServerAddress;
         
         private DatagramConnection mConnection;
         
-        public LogWritter(LogQueue buf)
+        public UdpWritter(String address, int port) throws IOException
         {
-            super(".LogerWriter");
             
-            mQueue = buf;
-            
+            mServerAddress = "datagram://" + address + ":" + port;
             if ((CoverageInfo.getCoverageStatus(RadioInfo.WAF_WLAN, true) & CoverageInfo.COVERAGE_DIRECT) == CoverageInfo.COVERAGE_DIRECT)
             {
-                logdUri += "/ ;interface=wifi";
+                mServerAddress += "/ ;interface=wifi";
             }
-            try
-            {
-                mConnection = (DatagramConnection) Connector.open(logdUri);
-            }
-            catch (IOException e)
-            {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
+            
+            mConnection = (DatagramConnection) Connector.open(mServerAddress);
+            
         }
         
-        public void run()
-        {
-            for (;;)
-            {
-                Syslog[] logs = mQueue.pop();
-                push(logs);
-            }
-        }
-        
-        private void push(Syslog[] logs)
+        /**
+         * Write the logs out.
+         * 
+         * @param logs
+         *            The logs need be written.
+         */
+        private void write(Syslog[] logs)
         {
             
             Datagram dg;
@@ -380,11 +451,11 @@ public abstract class Log
                     
                     String raw = logs[i].encode();
                     
-                    if (data.length() + raw.length() > 1000)
+                    if (data.length() + raw.length() > MAX_PAYLOAD_SIZE)
                     {
                         dg = mConnection.newDatagram(data.getBytes(),
                                 data.length(),
-                                logdUri);
+                                mServerAddress);
                         mConnection.send(dg);
                         
                         // Reset buffer.
@@ -397,14 +468,39 @@ public abstract class Log
                 // Send the last packet.
                 dg = mConnection.newDatagram(data.getBytes(),
                         data.length(),
-                        logdUri);
+                        mServerAddress);
                 mConnection.send(dg);
             }
             catch (IOException e)
             {
                 // ahh...
             }
+        }
+    }
+
+    static class LogForwarder extends Thread
+    {
+        
+        private LogQueue mQueue;
+        
+        private UdpWritter mWritter;
+        
+        public LogForwarder(LogQueue queue, UdpWritter writter)
+        {
+            super(".LogerWriter");
             
+            mQueue = queue;
+            mWritter = writter;
+        }
+        
+        public void run()
+        {
+            for (;;)
+            {
+                // Get the date from queue and send them out.
+                Syslog[] logs = mQueue.pop();
+                mWritter.write(logs);
+            }
         }
     }
 }

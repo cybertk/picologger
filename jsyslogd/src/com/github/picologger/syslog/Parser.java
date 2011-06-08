@@ -82,7 +82,7 @@ public abstract class Parser
         log.setSd(token[6].substring(0, pos));
         
         // Parse message.
-        if (pos > token[6].length())
+        if (pos < token[6].length())
         {
             log.setMsg(token[6].substring(pos + 1));
         }

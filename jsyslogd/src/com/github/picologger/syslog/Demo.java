@@ -23,19 +23,19 @@ public class Demo
         
         // TODO Auto-generated method stub
         
-        Syslog l = new Syslog(record);
+        Syslog l = Parser.parse(record);
         System.out.println(l);
         
-        l = new Syslog(recordWithSd);
+        l = Parser.parse(recordWithSd);
         System.out.println(l);
         
         Syslog l1 = new Syslog();
         String raw = l1.encode();
         System.out.println(raw);
         
-        l = new Syslog(raw);
+        l = Parser.parse(raw);
         System.out.println(l);
-        System.out.println(l.currentTimestamp());
+        System.out.println(Timestamp.currentTimestamp());
         
         ServerSocket s = null;
         try
