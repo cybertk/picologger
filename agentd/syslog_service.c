@@ -138,7 +138,7 @@ static void history_dump(int fd)
 
     FILE *o = fdopen(fd, "w");
 
-    fprintf(o, "[%d.%d] History of last %d second.",
+    fprintf(o, "[%d.%d] History of last %d second.\n",
             now.tv_sec,
             now.tv_usec,
             now.tv_sec - g_last_active_time.tv_sec);
@@ -147,7 +147,7 @@ static void history_dump(int fd)
 
         s = node_to_item(node, struct statistics, list);
 
-        fprintf(o, "    %s.%d: %d", inet_ntoa(s->addr), ntohs(s->port), s->count);
+        fprintf(o, "    %s.%d: %d\n", inet_ntoa(s->addr), ntohs(s->port), s->count);
     }
 
     fflush(o);
