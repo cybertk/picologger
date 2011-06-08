@@ -75,39 +75,34 @@ public abstract class Log
 {
     
     /**
-     * Priority constant for the println method; use Log.v.
+     * Priority constant for the log method; use Log.v.
      */
     public static final int VERBOSE = 2;
     
     /**
-     * Priority constant for the println method; use Log.d.
+     * Priority constant for the log method; use Log.d.
      */
     public static final int DEBUG = 3;
     
     /**
-     * Priority constant for the println method; use Log.i.
+     * Priority constant for the log method; use Log.i.
      */
     public static final int INFO = 4;
     
     /**
-     * Priority constant for the println method; use Log.w.
+     * Priority constant for the log method; use Log.w.
      */
     public static final int WARN = 5;
     
     /**
-     * Priority constant for the println method; use Log.e.
+     * Priority constant for the log method; use Log.e.
      */
     public static final int ERROR = 6;
     
     /**
-     * Priority constant for the println method.
+     * Priority constant for the log method.
      */
     public static final int ASSERT = 7;
-    
-    private Log()
-    {
-        
-    }
     
     /**
      * Send a {@link #VERBOSE} log message.
@@ -166,8 +161,8 @@ public abstract class Log
     }
     
     /**
-     * Checks to see whether or not a log for the specified tag is loggable at
-     * the specified level.
+     * TODO: Checks to see whether or not a log for the specified tag is
+     * loggable at the specified level.
      * 
      * The default level of any tag is set to INFO. This means that any level
      * above and including INFO will be logged. Before you make any calls to a
@@ -203,23 +198,6 @@ public abstract class Log
         return log(LOG_ID_MAIN, ERROR, tag, msg);
     }
     
-    /**
-     * Low-level logging call.
-     * 
-     * @param priority
-     *            The priority/type of this log message
-     * @param tag
-     *            Used to identify the source of a log message. It usually
-     *            identifies the class or activity where the log call occurs.
-     * @param msg
-     *            The message you would like logged.
-     * @return The number of bytes written.
-     */
-    public static int println(int priority, String tag, String msg)
-    {
-        return log(LOG_ID_MAIN, priority, tag, msg);
-    }
-    
     /** @hide */
     public static final int LOG_ID_MAIN = 0;
     
@@ -232,8 +210,14 @@ public abstract class Log
     /** @hide */
     public static final int LOG_ID_SYSTEM = 3;
     
+    /**
+     * Logging Queue.
+     */
     private static LogQueue sQueue;
     
+    /**
+     * Log dumper.
+     */
     private static LogWritter sWritter;
     
     /**
@@ -241,23 +225,33 @@ public abstract class Log
      */
     final private static String DEFAULT_HOSTNAME = "picologger_server";
     
+    /**
+     * Host name.
+     */
     private static String sHostname;
     
+    // Init.
     static
     {
+        // Init hostname.
         sHostname = getHostname();
         if (null == sHostname)
         {
             sHostname = DEFAULT_HOSTNAME;
         }
         
+        // Init queue.
         sQueue = new LogQueue(1000);
         
+        // Init writter.
         sWritter = new LogWritter(sQueue);
         sWritter.start();
     }
     
-    public static String getHostname()
+    /**
+     * Returns the local IP address.
+     */
+    private static String getHostname()
     {
         String localAddr = null;
         SocketConnection conn = null;
@@ -288,14 +282,34 @@ public abstract class Log
         return localAddr;
     }
     
+    /**
+     * Low-level logging call.
+     * 
+     * @param priority
+     *            The priority/type of this log message
+     * @param tag
+     *            Used to identify the source of a log message. It usually
+     *            identifies the class or activity where the log call occurs.
+     * @param msg
+     *            The message you would like logged.
+     * @return The number of bytes written.
+     */
+    private static int log(int priority, String tag, String msg)
+    {
+        return log(LOG_ID_MAIN, priority, tag, msg);
+    }
+    
     private static int log(int bufID, int priority, String tag, String msg)
     {
+        // Setup Syslog.
         Syslog log = new Syslog();
         log.setTimestamp(Timestamp.currentTimestamp());
         log.setHostname(sHostname);
         log.setFacility(priority);
         log.setProcid(tag);
         log.setMsg(msg);
+        
+        // Push to queue.
         sQueue.push(log);
         
         return 0;
@@ -344,11 +358,10 @@ public abstract class Log
         }
         
         /**
-         * TODO: return more than one records. Returns one log record.
+         * Returns more than one records.
          */
         public Syslog[] pop()
         {
-            
             synchronized (mQueue)
             {
                 try
@@ -394,8 +407,6 @@ public abstract class Log
             }
             catch (IOException e)
             {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
             }
         }
         
@@ -403,12 +414,19 @@ public abstract class Log
         {
             for (;;)
             {
+                // Get the date from queue and send them out.
                 Syslog[] logs = mQueue.pop();
-                push(logs);
+                write(logs);
             }
         }
         
-        private void push(Syslog[] logs)
+        /**
+         * Write the logs out.
+         * 
+         * @param logs
+         *            The logs need be written.
+         */
+        private void write(Syslog[] logs)
         {
             
             Datagram dg;
@@ -444,7 +462,6 @@ public abstract class Log
             {
                 // ahh...
             }
-            
         }
     }
 }
