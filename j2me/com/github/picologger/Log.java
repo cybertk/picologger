@@ -29,7 +29,6 @@ import javax.microedition.io.SocketConnection;
 
 import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
-import net.rim.device.api.system.WLANInfo;
 
 import com.github.picologger.syslog.Syslog;
 import com.github.picologger.syslog.Timestamp;
@@ -218,7 +217,12 @@ public abstract class Log
     /**
      * Log dumper.
      */
-    private static LogWritter sWritter;
+    private static LogForwarder sForwarder;
+    
+    /**
+     * Log writer.
+     */
+    private static UdpWritter sWritter;
     
     /**
      * Server will translate to real device ip.
@@ -243,9 +247,23 @@ public abstract class Log
         // Init queue.
         sQueue = new LogQueue(1000);
         
-        // Init writter.
-        sWritter = new LogWritter(sQueue);
-        sWritter.start();
+        try
+        {
+            // Init writter.
+            sWritter = new UdpWritter("10.60.5.62", 10505);
+            
+            // Init Forwarder if we have initialized the writter.
+            sForwarder = new LogForwarder(sQueue, sWritter);
+            sForwarder.start();
+        }
+        catch (IOException e)
+        {
+            // Release the resource we hold.
+            sHostname = null;
+            sQueue = null;
+            sWritter = null;
+        }
+        
     }
     
     /**
@@ -301,6 +319,14 @@ public abstract class Log
     
     private static int log(int bufID, int priority, String tag, String msg)
     {
+        
+        if (null == sQueue)
+        {
+            // We failed on init.
+            
+            System.out.println("<" + priority + "> " + tag + ": " + msg);
+        }
+        
         // Setup Syslog.
         Syslog log = new Syslog();
         log.setTimestamp(Timestamp.currentTimestamp());
@@ -382,49 +408,29 @@ public abstract class Log
         }
     }
     
-    static class LogWritter extends Thread
+    //TODO: Define and implement a log writter interface.
+    static class UdpWritter
     {
         private static final int MAX_PAYLOAD_SIZE = 1000;
         
         /**
-         * Queue we get data from.
-         */
-        private final LogQueue mQueue;
-        
-        /**
          * Syslog server address.
          */
-        private String logdUri = "datagram://10.60.5.62:10505";
+        private String mServerAddress;
         
         private DatagramConnection mConnection;
         
-        public LogWritter(LogQueue buf)
+        public UdpWritter(String address, int port) throws IOException
         {
-            super(".LogerWriter");
             
-            mQueue = buf;
-            
+            mServerAddress = "datagram://" + address + ":" + port;
             if ((CoverageInfo.getCoverageStatus(RadioInfo.WAF_WLAN, true) & CoverageInfo.COVERAGE_DIRECT) == CoverageInfo.COVERAGE_DIRECT)
             {
-                logdUri += "/ ;interface=wifi";
+                mServerAddress += "/ ;interface=wifi";
             }
-            try
-            {
-                mConnection = (DatagramConnection) Connector.open(logdUri);
-            }
-            catch (IOException e)
-            {
-            }
-        }
-        
-        public void run()
-        {
-            for (;;)
-            {
-                // Get the date from queue and send them out.
-                Syslog[] logs = mQueue.pop();
-                write(logs);
-            }
+            
+            mConnection = (DatagramConnection) Connector.open(mServerAddress);
+            
         }
         
         /**
@@ -449,7 +455,7 @@ public abstract class Log
                     {
                         dg = mConnection.newDatagram(data.getBytes(),
                                 data.length(),
-                                logdUri);
+                                mServerAddress);
                         mConnection.send(dg);
                         
                         // Reset buffer.
@@ -462,12 +468,38 @@ public abstract class Log
                 // Send the last packet.
                 dg = mConnection.newDatagram(data.getBytes(),
                         data.length(),
-                        logdUri);
+                        mServerAddress);
                 mConnection.send(dg);
             }
             catch (IOException e)
             {
                 // ahh...
+            }
+        }
+    }
+
+    static class LogForwarder extends Thread
+    {
+        
+        private LogQueue mQueue;
+        
+        private UdpWritter mWritter;
+        
+        public LogForwarder(LogQueue queue, UdpWritter writter)
+        {
+            super(".LogerWriter");
+            
+            mQueue = queue;
+            mWritter = writter;
+        }
+        
+        public void run()
+        {
+            for (;;)
+            {
+                // Get the date from queue and send them out.
+                Syslog[] logs = mQueue.pop();
+                mWritter.write(logs);
             }
         }
     }
