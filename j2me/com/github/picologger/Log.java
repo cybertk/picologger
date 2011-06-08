@@ -384,10 +384,17 @@ public abstract class Log
     
     static class LogWritter extends Thread
     {
+        private static final int MAX_PAYLOAD_SIZE = 1000;
         
+        /**
+         * Queue we get data from.
+         */
+        private final LogQueue mQueue;
+        
+        /**
+         * Syslog server address.
+         */
         private String logdUri = "datagram://10.60.5.62:10505";
-        
-        final private LogQueue mQueue;
         
         private DatagramConnection mConnection;
         
@@ -438,7 +445,7 @@ public abstract class Log
                     
                     String raw = logs[i].encode();
                     
-                    if (data.length() + raw.length() > 1000)
+                    if (data.length() + raw.length() > MAX_PAYLOAD_SIZE)
                     {
                         dg = mConnection.newDatagram(data.getBytes(),
                                 data.length(),
