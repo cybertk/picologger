@@ -24,8 +24,9 @@
 #include "client.h"
 #include "list.h"
 #include "log.h"
+#include "fdevent.h"
 
-struct client* alloc_client()
+struct client* client_create()
 {
 
     struct client *c;
@@ -42,12 +43,18 @@ struct client* alloc_client()
     return c;
 }
 
-void destory_client(struct client *c)
+void client_destroy(struct client *c)
 {
+
+    D("Client %s destroied", c->name);
+
+    fdevent_remove(&c->fde);
+    close(c->fde.fd);
+
     free(c);
 }
 
-void dump_client(struct client *c)
+void client_dump(struct client *c)
 {
     struct listnode *node;
 

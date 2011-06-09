@@ -26,6 +26,7 @@
 #include <netinet/in.h>
 #include <getopt.h>
 #include <errno.h>
+#include <time.h>
 
 #include "log.h"
 #include "syslog.h"
@@ -33,6 +34,8 @@
 #include "client.h"
 
 extern struct listnode clients;
+
+static struct timeval g_last_active_time;
 
 struct syslog_filter {
 
@@ -42,6 +45,113 @@ struct syslog_filter {
     /* filter item */
     syslog_record filter;
 };
+
+list_declare(history);
+
+/**
+ * Client Statistics.
+ */
+struct statistics {
+
+    /* Host address */
+    in_addr_t addr;
+
+    /* Host port */
+    short port;
+
+    /* Receiving log counts */
+    int count;
+
+    struct listnode list;
+};
+
+/**
+ * Update statistics.
+ */
+static void history_update(in_addr_t addr, short port)
+{
+
+    struct listnode *node;
+    struct statistics *s;
+    int found = 0;
+
+    list_for_each(node, &history) {
+
+        s = node_to_item(node, struct statistics, list);
+
+        if (addr == s->addr && port == s->port) {
+
+            /* Update log counter */
+            s->count++;
+
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found) {
+
+        /* Insert new host into history */
+        s = malloc(sizeof(struct statistics));
+        if (!s)
+            return;
+
+        s->addr = addr;
+        s->port = port;
+        s->count = 1;
+
+        list_add_tail(&history, &s->list);
+    }
+}
+
+/**
+ * Reset History
+ */
+static void history_clear()
+{
+
+    struct listnode *node;
+    struct statistics *s;
+
+    list_for_each(node, &history) {
+
+        s = node_to_item(node, struct statistics, list);
+
+        /* Remove from history list. */
+        list_remove(&s->list);
+
+        /* free mem we use. */
+        free(s);
+    }
+}
+
+/**
+ * Dump history.
+ */
+static void history_dump(int fd)
+{
+    struct listnode *node;
+    struct statistics *s;
+    struct timeval now;
+
+    gettimeofday(&now, NULL);
+
+    FILE *o = fdopen(fd, "w");
+
+    fprintf(o, "[%d.%d] History of last %d second.\n",
+            now.tv_sec,
+            now.tv_usec,
+            now.tv_sec - g_last_active_time.tv_sec);
+
+    list_for_each(node, &history) {
+
+        s = node_to_item(node, struct statistics, list);
+
+        fprintf(o, "    %s.%d: %d\n", inet_ntoa(s->addr), ntohs(s->port), s->count);
+    }
+
+    fflush(o);
+}
 
 /**
  * Check whether current log'address match client's filter
@@ -78,7 +188,7 @@ static void notify_clients(char *from, char *buf, size_t sz)
 {
     syslog_record r;
 
-    //D("syslog: %s", buf);
+    //D("%s syslog: %s", from, buf);
 
     buf[sz] = 0;
     syslog_parse(buf, sz, &r);
@@ -103,7 +213,6 @@ static void notify_clients(char *from, char *buf, size_t sz)
                 && filter_match(
                     (struct listnode *) c->running_command.cookie, &r)) {
 
-            D("nofity client %s", c->name);
             write(c->fde.fd, buf, sz);
         }
     }
@@ -133,7 +242,23 @@ static void syslog_sock_handler(int fd, unsigned events, void* cookie)
         perror("read");
         return;
     } else {
-        //D("recv %d bytes from %s\n", sz, inet_ntoa(sa.sin_addr));
+
+        history_update(sa.sin_addr.s_addr, sa.sin_port);
+
+#if 0
+        /* send statistics to stdout */
+        struct timeval now;
+
+        gettimeofday(&now, NULL);
+        if ((now.tv_sec - g_last_active_time.tv_sec) > 10) {
+
+            /* dump the statistics in last 10s, then reset it. */
+            history_dump();
+            history_clear();
+
+            g_last_active_time = now;
+        }
+#endif
 
         // Relay to clients.
         notify_clients(inet_ntoa(sa.sin_addr), buf, sz);
@@ -161,8 +286,8 @@ static void dump_filters(struct listnode *filters)
     list_for_each(node, filters) {
 
         f = node_to_item(node, struct syslog_filter, list);
-        dump_syslog_record(&f->filter);
 
+        D("host: %s, tag: %s", f->filter.hostname, f->filter.procid);
     }
 }
 
@@ -207,11 +332,31 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
     /* Reset getopt. */
     /* Seems argv[argc] = 0 will not reset optind automatically */
     optind = 1;
-    while ((opt = getopt(argc, argv, "a:t:")) != -1) {
+
+    /**
+     * Usage: 
+     *      Setup filter.
+     *      syslog [ -a hostname ] [ -t tag ]
+     *
+     *      Dump statistics.
+     *      syslog -s
+     *
+     */
+    while ((opt = getopt(argc, argv, "sa:t:")) != -1) {
 
         struct syslog_filter *f;
 
         switch (opt) {
+            case 's':
+
+                history_dump(client->fde.fd);
+
+                // mission completed.
+                client_destroy(client);
+                list_remove(&client->clist);
+
+                break;
+
             case 'a':
 
                 f = malloc(sizeof(*f));

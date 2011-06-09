@@ -69,7 +69,7 @@ static void dump_clients(void)
     D("--- clients dump ---\n");
     list_for_each(node, &clients) {
         c = node_to_item(node, struct client, clist);
-        dump_client(c);
+        client_dump(c);
     }
 }
 
@@ -168,7 +168,7 @@ static void ctlsock_io_handler(int fd, unsigned events, void* cookie)
 
         /* close by remote */
         /* TODO: check all services under client, and destroy client */
-        fdevent_remove(&c->fde);
+        client_destroy(c);
         list_remove(&c->clist);
 
         return;
@@ -224,7 +224,7 @@ static void ctlsock_connect_handler(int fd, unsigned events, void* cookie)
     int s;
 
     /* Alloc new client. */
-    struct client *c = alloc_client();
+    struct client *c = client_create();
     if (!c)
         return;
 

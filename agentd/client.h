@@ -57,7 +57,7 @@ struct client {
 };
 
 struct client* alloc_client();
-void destory_client(struct client*);
-void dump_client(struct client*);
+void client_destory(struct client*);
+void client_dump(struct client*);
 
 #endif
