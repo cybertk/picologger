@@ -351,6 +351,10 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
 
                 history_dump(client->fde.fd);
 
+                // mission completed.
+                client_destroy(client);
+                list_remove(&client->clist);
+
                 break;
 
             case 'a':
