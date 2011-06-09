@@ -262,6 +262,8 @@ public abstract class Log
             sHostname = null;
             sQueue = null;
             sWritter = null;
+            
+            System.out.println("failed to init picologger.");
         }
         
     }
@@ -276,7 +278,7 @@ public abstract class Log
         
         try
         {
-            conn = (SocketConnection) Connector.open("socket://www.google.com:80");
+            conn = (SocketConnection) Connector.open("socket://www.baidu.com:80");
             localAddr = conn.getLocalAddress();
         }
         catch (Throwable e)
@@ -325,6 +327,7 @@ public abstract class Log
             // We failed on init.
             
             System.out.println("<" + priority + "> " + tag + ": " + msg);
+            return -1;
         }
         
         // Setup Syslog.
@@ -409,7 +412,7 @@ public abstract class Log
     }
     
     //TODO: Define and implement a log writter interface.
-    static class UdpWritter
+    public static class UdpWritter
     {
         private static final int MAX_PAYLOAD_SIZE = 1000;
         
@@ -439,7 +442,7 @@ public abstract class Log
          * @param logs
          *            The logs need be written.
          */
-        private void write(Syslog[] logs)
+        public void write(Syslog[] logs)
         {
             
             Datagram dg;
@@ -477,7 +480,7 @@ public abstract class Log
             }
         }
     }
-
+    
     static class LogForwarder extends Thread
     {
         
