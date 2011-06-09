@@ -69,13 +69,11 @@ public class WorkerThread extends Thread
             return;
         }
         
-        for (;;)
-        {
-            threadLoop();
-        }
+        while (threadLoop())
+            ;
     }
     
-    private void threadLoop()
+    private boolean threadLoop()
     {
         try
         {
@@ -103,12 +101,19 @@ public class WorkerThread extends Thread
             
             // Get outputs from remote.
             String str = mIn.readLine();
+            
+            if (null == str)
+            {
+                
+                mPrintWriter.append("End of Stream");
+                return false;
+            }
             mPrintWriter.append(str);
         }
         catch (IOException e)
         {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
         }
+        
+        return true;
     }
 }

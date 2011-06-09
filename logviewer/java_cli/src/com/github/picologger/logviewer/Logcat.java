@@ -2,6 +2,7 @@ package com.github.picologger.logviewer;
 
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 
 import com.github.picologger.syslog.Parser;
@@ -17,11 +18,44 @@ public class Logcat
     {
         // Demo
         
-        WorkerThread worker = new WorkerThread(new InetSocketAddress(
-                "10.60.5.62", 10504), new LogStream(null));
+        if (args.length >= 2)
+        {
+            InetSocketAddress addr = null;
+            try
+            {
+                addr = new InetSocketAddress(args[0], Integer.parseInt(args[1]));
+                
+            }
+            catch (Exception e)
+            {
+                System.out.println("Cannot connect to remote server.");
+                return;
+            }
+            
+            // Construct argv.
+            String s = "";
+            if (args.length > 2)
+            {
+                for (int i = 2; i < args.length; i++)
+                {
+                    s += " " + args[i];
+                }
+            }
+            else
+            {
+                s = " -s";
+            }
+            
+            WorkerThread worker = new WorkerThread(addr, new LogStream(null));
+            
+            worker.sendCommand("FLTR" + s);
+            worker.start();
+        }
+        else
+        {
+            System.out.println("Usage: logcat SERVER PORT [-a hostname]...");
+        }
         
-        worker.sendCommand("FLTR -a 10.60.5.92");
-        worker.start();
     }
     
     static class LogStream extends PrintStream
