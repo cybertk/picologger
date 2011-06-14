@@ -72,6 +72,13 @@ static int parse_rfc3164(const char* log, syslog_record *record)
     pos = (char *)log;
     pos0 = pos;
 
+    // Special case for no HEADER.
+    if (*pos == ' ') {
+
+        record->msg = strdup(pos);
+        return 0;
+    }
+
     // Parse timestamp
     int tokens = 3;
     while (tokens) {
@@ -181,6 +188,9 @@ static int parse_line(const char* line, syslog_record *record)
     char *pos, *pos0;
 
     pos = (char *)line;
+
+    // Reset.
+    memset(record, 0, sizeof(syslog_record));
 
     // Validate syslog format
     pos0 = strchr(pos, '>');
