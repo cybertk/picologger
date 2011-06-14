@@ -188,14 +188,24 @@ static void notify_clients(char *from, char *buf, size_t sz)
 {
     syslog_record r;
 
-    //D("%s syslog: %s", from, buf);
+#if 0
+    D("%s syslog: %s", from, buf);
+#endif
 
     buf[sz] = 0;
     syslog_parse(buf, sz, &r);
 
+    /* TODO: remove this feature */
+    /* Append linefeed */
+    if (buf[sz - 1] != '\n') {
+        buf[sz] = '\n';
+        ++sz;
+    }
+
     char *syslog = buf;
 
-    if (!strcmp(r.hostname, "picologger_server")) {
+    if (!r.hostname ||
+            !strcmp(r.hostname, "picologger_server")) {
         r.hostname = from;
 
         // TODO:
@@ -342,6 +352,13 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
      *      syslog -s
      *
      */
+#if 0
+    int x = 0;
+    while (x < argc) {
+        D(" argv[%d], %p: %s, %d", x, argv[x], argv[x], strlen(argv[x]));
+        ++x;
+    }
+#endif
     while ((opt = getopt(argc, argv, "sa:t:")) != -1) {
 
         struct syslog_filter *f;
