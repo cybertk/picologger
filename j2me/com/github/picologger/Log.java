@@ -159,6 +159,11 @@ public abstract class Log
         return log(LOG_ID_MAIN, WARN, tag, msg);
     }
     
+    public static void setLoggable(boolean enable)
+    {
+        sLoggable = enable;
+    }
+    
     /**
      * TODO: Checks to see whether or not a log for the specified tag is
      * loggable at the specified level.
@@ -224,6 +229,8 @@ public abstract class Log
      */
     private static UdpWritter sWritter;
     
+    private static boolean sLoggable = true;
+    
     /**
      * Server will translate to real device ip.
      */
@@ -256,7 +263,7 @@ public abstract class Log
             sForwarder = new LogForwarder(sQueue, sWritter);
             sForwarder.start();
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             // Release the resource we hold.
             sHostname = null;
@@ -322,7 +329,7 @@ public abstract class Log
     private static int log(int bufID, int priority, String tag, String msg)
     {
         
-        if (null == sQueue)
+        if (null == sQueue || !sLoggable)
         {
             // We failed on init.
             
