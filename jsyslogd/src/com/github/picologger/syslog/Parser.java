@@ -22,7 +22,7 @@ public abstract class Parser
     
     public static Syslog parse(String record) throws IllegalArgumentException
     {
-        if (null == record)
+        if (null == record || "".equals(record))
         {
             throw new IllegalArgumentException("no record.");
         }
