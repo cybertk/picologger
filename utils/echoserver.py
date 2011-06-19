@@ -43,4 +43,4 @@ while True:
     s.sendto(data, addr)
     delta = (time.time() - just_now) * 1000
     just_now = time.time()
-    print "%s [%9.4f] Forwarded %d-bytes data" % (datetime.now().strftime(DATE_FMT), delta, len(data))
+    print("%s [%9.4f] Forwarded %d-bytes data" % (datetime.now().strftime(DATE_FMT), delta, len(data)))
