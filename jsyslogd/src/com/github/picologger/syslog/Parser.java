@@ -22,7 +22,8 @@ public abstract class Parser
     
     public static Syslog parse(String record) throws IllegalArgumentException
     {
-        if (null == record) {
+        if (null == record || "".equals(record))
+        {
             throw new IllegalArgumentException("no record.");
         }
         
@@ -40,14 +41,29 @@ public abstract class Parser
         // Parse Header.
         
         // Parse facility and severity.
-        int pri = Integer.parseInt((record.substring(1, pos)));
-        log.setFacility(pri >> 3);
-        log.setSeverity(pri & 0x7);
+        try
+        {
+            int pri = Integer.parseInt((record.substring(1, pos)));
+            log.setFacility(pri >> 3);
+            log.setSeverity(pri & 0x7);
+        }
+        catch (NumberFormatException e)
+        {
+            throw new IllegalArgumentException("Malformed syslog record.");
+        }
         
         // Parse Version.
         ++pos;
-        log.setVersion(record.charAt(pos) - 0x30);
+        final int version = record.charAt(pos) - 0x30;
         
+        // Validate Version.
+        if (version != 1)
+        {
+            throw new IllegalArgumentException(
+                    "Malformed syslog record. RFC3164?");
+        }
+        
+        log.setVersion(version);
         String[] token = record.split(" ", 7);
         
         log.setTimestamp(token[1]);
