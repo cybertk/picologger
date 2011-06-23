@@ -399,6 +399,11 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                 //TODO: find duplicate
                 list_add_tail(filters, &f->list);
                 break;
+
+            default:
+                write(client->fde.fd, "see usage", 10);
+                return;
+
         }
     }
 
