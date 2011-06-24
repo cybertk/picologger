@@ -380,6 +380,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                 if (!f)
                     return -ENOMEM;
 
+                if (!optarg) goto oops;
+
                 f->filter.hostname = strdup(optarg);
 
                 //TODO: find duplicate
@@ -394,6 +396,8 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                 if (!f)
                     return -ENOMEM;
 
+                if (!optarg) goto oops;
+
                 f->filter.procid = strdup(optarg);
 
                 //TODO: find duplicate
@@ -401,9 +405,7 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
                 break;
 
             default:
-                write(client->fde.fd, "see usage", 10);
-                return;
-
+                goto oops;
         }
     }
 
@@ -411,5 +413,9 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
     client->running_command.cookie = filters;
 
     dump_filters(filters);
+    return;
+
+oops:
+    write(client->fde.fd, "see usage", 10);
 }
 
