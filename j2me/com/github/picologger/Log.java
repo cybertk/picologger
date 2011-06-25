@@ -19,6 +19,7 @@
 
 package com.github.picologger;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Vector;
 
@@ -26,8 +27,8 @@ import javax.microedition.io.Connector;
 import javax.microedition.io.Datagram;
 import javax.microedition.io.DatagramConnection;
 import javax.microedition.io.SocketConnection;
+import javax.microedition.io.file.FileConnection;
 
-import net.rim.device.api.system.CoverageInfo;
 import net.rim.device.api.system.RadioInfo;
 
 import com.github.picologger.syslog.Syslog;
@@ -114,7 +115,7 @@ public abstract class Log
      */
     public static int v(String tag, String msg)
     {
-        return log(LOG_ID_MAIN, VERBOSE, tag, msg);
+        return log(VERBOSE, tag, msg);
     }
     
     /**
@@ -128,7 +129,7 @@ public abstract class Log
      */
     public static int d(String tag, String msg)
     {
-        return log(LOG_ID_MAIN, DEBUG, tag, msg);
+        return log(DEBUG, tag, msg);
     }
     
     /**
@@ -142,7 +143,7 @@ public abstract class Log
      */
     public static int i(String tag, String msg)
     {
-        return log(LOG_ID_MAIN, INFO, tag, msg);
+        return log(INFO, tag, msg);
     }
     
     /**
@@ -156,7 +157,7 @@ public abstract class Log
      */
     public static int w(String tag, String msg)
     {
-        return log(LOG_ID_MAIN, WARN, tag, msg);
+        return log(WARN, tag, msg);
     }
     
     public static void setLoggable(boolean enable)
@@ -199,20 +200,8 @@ public abstract class Log
      */
     public static int e(String tag, String msg)
     {
-        return log(LOG_ID_MAIN, ERROR, tag, msg);
+        return log(ERROR, tag, msg);
     }
-    
-    /** @hide */
-    public static final int LOG_ID_MAIN = 0;
-    
-    /** @hide */
-    public static final int LOG_ID_RADIO = 1;
-    
-    /** @hide */
-    public static final int LOG_ID_EVENTS = 2;
-    
-    /** @hide */
-    public static final int LOG_ID_SYSTEM = 3;
     
     /**
      * Logging Queue.
@@ -227,7 +216,7 @@ public abstract class Log
     /**
      * Log writer.
      */
-    private static UdpWritter sWritter;
+    private static Vector sWritters;
     
     private static boolean sLoggable = true;
     
@@ -242,37 +231,47 @@ public abstract class Log
     private static String sHostname;
     
     // Init.
-    static
+    static public void init()
     {
         // Init hostname.
-        sHostname = getHostname();
-        if (null == sHostname)
-        {
-            sHostname = DEFAULT_HOSTNAME;
-        }
+        sHostname = DEFAULT_HOSTNAME;
         
         // Init queue.
         sQueue = new LogQueue(1000);
         
+        // Init writters.
+        sWritters = new Vector();
         try
         {
-            // Init writter.
-            sWritter = new UdpWritter("10.60.5.62", 10505);
-            
-            // Init Forwarder if we have initialized the writter.
-            sForwarder = new LogForwarder(sQueue, sWritter);
-            sForwarder.start();
+            sWritters.addElement(new FileWritter("file:///SDCard/picologger/"));
         }
         catch (Exception e)
         {
-            // Release the resource we hold.
-            sHostname = null;
-            sQueue = null;
-            sWritter = null;
-            
-            System.out.println("failed to init picologger.");
+            System.out.println("failed to init file writter, " + e);
         }
         
+        // Init Forwarder if we have initialized the writter.
+        sForwarder = new LogForwarder(sQueue, sWritters);
+        sForwarder.start();
+        
+        // Start a dedicated thread;
+        new Thread(new Runnable()
+        {
+            public void run()
+            {
+                try
+                {
+                    // Init udp writter, this is a blocking call.
+                    sWritters.addElement(new UdpWritter("10.60.5.62", 10505));
+                }
+                catch (Exception e)
+                {
+                    System.out.println("failed to init udp writter.");
+                }
+                
+                sHostname = getHostname();
+            }
+        }).start();
     }
     
     /**
@@ -323,12 +322,6 @@ public abstract class Log
      */
     private static int log(int priority, String tag, String msg)
     {
-        return log(LOG_ID_MAIN, priority, tag, msg);
-    }
-    
-    private static int log(int bufID, int priority, String tag, String msg)
-    {
-        
         if (null == sQueue || !sLoggable)
         {
             // We failed on init.
@@ -400,16 +393,24 @@ public abstract class Log
         {
             synchronized (mQueue)
             {
-                try
+                int size;
+                
+                size = 0;
+                while (size == 0)
                 {
-                    mQueue.wait();
-                }
-                catch (InterruptedException e)
-                {
-                    // hmm...
+                    try
+                    {
+                        mQueue.wait(100);
+                    }
+                    catch (InterruptedException e)
+                    {
+                        // hmm...
+                    }
+                    
+                    size = mQueue.size();
                 }
                 
-                Syslog[] logs = new Syslog[mQueue.size()];
+                Syslog[] logs = new Syslog[size];
                 mQueue.copyInto(logs);
                 reset();
                 
@@ -418,8 +419,123 @@ public abstract class Log
         }
     }
     
+    public interface ISyslogWritter
+    {
+        public void write(Syslog[] logs);
+        
+        public void flush();
+    }
+    
+    public static class FileWritter implements ISyslogWritter
+    {
+        private DataOutputStream mLogFileConnOut;
+        
+        private FileConnection mLogFileConn;
+        
+        public FileWritter(String path) throws IOException
+        {
+            
+            final String fileName;
+            
+            fileName = getLogPath(path);
+            if (null == fileName)
+            {
+                throw new IOException("Something wrong with path " + path);
+            }
+            mLogFileConn = (FileConnection) Connector.open(fileName,
+                    Connector.READ_WRITE);
+
+            if (mLogFileConn != null && !mLogFileConn.exists())
+            {
+                // Create file if non-exist.
+                mLogFileConn.create();
+            }
+
+            mLogFileConnOut = mLogFileConn.openDataOutputStream();
+
+        }
+        
+        /**
+         * Return {@code null} if something is wrong.
+         */
+        private String getLogPath(String path)
+        {
+            try
+            {
+                final FileConnection logDirConn;
+                
+                if (!path.endsWith("/"))
+                {
+                    // Make sure path is end with '\'.
+                    path += "/";
+                }
+                
+                logDirConn = (FileConnection) Connector.open(path,
+                        Connector.READ_WRITE);
+                
+                if (logDirConn != null && !logDirConn.exists())
+                {
+                    // Make directory if non-exist.
+                    logDirConn.mkdir();
+                }
+                
+                if (logDirConn != null)
+                {
+                    // Release.
+                    logDirConn.close();
+                }
+                
+                path += Timestamp.currentTimestamp().replace(':', '-') + ".txt";
+                return path;
+            }
+            catch (Exception e)
+            {
+                return null;
+            }
+        }
+        
+        /**
+         * Write the logs out.
+         * 
+         * @param logs
+         *            The logs need be written.
+         */
+        public void write(Syslog[] logs)
+        {
+            for (int i = 0; i < logs.length; i++)
+            {
+                final byte[] data;
+                
+                data = (logs[i].encode() + "\r\n").getBytes();
+                try
+                {
+                    mLogFileConnOut.write(data);
+                    
+                }
+                catch (IOException e)
+                {
+                    // hell.
+                }
+            }
+        }
+        
+        public void flush()
+        {
+            
+            try
+            {
+                mLogFileConnOut.flush();
+            }
+            catch (IOException e)
+            {
+                // e.
+            }
+            
+        }
+    }
+    
     //TODO: Define and implement a log writter interface.
-    public static class UdpWritter
+    public static class UdpWritter implements ISyslogWritter
     {
         private static final int MAX_PAYLOAD_SIZE = 1000;
         
@@ -432,9 +548,14 @@ public abstract class Log
         
         public UdpWritter(String address, int port) throws IOException
         {
+            final boolean isSimulator;
+            
+            isSimulator = "Default 3G Network".equals(RadioInfo.getCurrentNetworkName());
             
             mServerAddress = "datagram://" + address + ":" + port;
-            if ((CoverageInfo.getCoverageStatus(RadioInfo.WAF_WLAN, true) & CoverageInfo.COVERAGE_DIRECT) == CoverageInfo.COVERAGE_DIRECT)
+            
+            // Force route WIFI on Device.
+            if (!isSimulator)
             {
                 mServerAddress += "/ ;interface=wifi";
             }
@@ -486,30 +607,63 @@ public abstract class Log
                 // ahh...
             }
         }
+        
+        public void flush()
+        {
+            // Cannot flush
+        }
     }
     
     static class LogForwarder extends Thread
     {
         
+        private static final long FLUSH_TIME = 2000;
+        
         private LogQueue mQueue;
         
-        private UdpWritter mWritter;
+        private Vector mWritters;
         
-        public LogForwarder(LogQueue queue, UdpWritter writter)
+        public LogForwarder(LogQueue queue, Vector writters)
         {
             super(".LogerWriter");
             
             mQueue = queue;
-            mWritter = writter;
+            mWritters = writters;
         }
         
         public void run()
         {
+            long last;
+            long now;
+            
+            last = System.currentTimeMillis();
+            
             for (;;)
             {
+                final Syslog[] logs;
+                ISyslogWritter writter;
+                
                 // Get the date from queue and send them out.
-                Syslog[] logs = mQueue.pop();
-                mWritter.write(logs);
+                logs = mQueue.pop();
+                
+                now = System.currentTimeMillis();
+                if (now - last > FLUSH_TIME)
+                {
+                    // Flush all writers.
+                    for (int i = 0; i < mWritters.size(); ++i)
+                    {
+                        writter = (ISyslogWritter) mWritters.elementAt(i);
+                        writter.flush();
+                    }
+                    
+                    last = now;
+                }
+                
+                for (int i = 0; i < mWritters.size(); ++i)
+                {
+                    writter = (ISyslogWritter) mWritters.elementAt(i);
+                    writter.write(logs);
+                }
             }
         }
     }
