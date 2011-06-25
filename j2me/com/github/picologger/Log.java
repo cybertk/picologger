@@ -233,6 +233,10 @@ public abstract class Log
     // Init.
     static public void init()
     {
+        if (sQueue != null)
+        {
+            return;
+        }
         // Init hostname.
         sHostname = DEFAULT_HOSTNAME;
         
@@ -444,15 +448,15 @@ public abstract class Log
             }
             mLogFileConn = (FileConnection) Connector.open(fileName,
                     Connector.READ_WRITE);
-
+            
             if (mLogFileConn != null && !mLogFileConn.exists())
             {
                 // Create file if non-exist.
                 mLogFileConn.create();
             }
-
+            
             mLogFileConnOut = mLogFileConn.openDataOutputStream();
-
+            
         }
         
         /**
