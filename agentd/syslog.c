@@ -209,7 +209,7 @@ static int parse_line(const char* line, syslog_record *record)
     pos = pos0 + 1;
 
     // Detect syslog version.
-    if (isdigit(*pos)) {
+    if (*pos == '1') {
 
         record->bsd = 0;
         return parse_rfc5424(pos, record);
@@ -234,7 +234,7 @@ int syslog_parse(char *data, int sz, syslog_record *record)
     return parse_line(data, record);
 }
 
-void dump_syslog_record(syslog_record *record)
+void syslog_dump(syslog_record *record)
 {
     D("Facility: %d", record->facility);
     D("severity: %d", record->severity);
@@ -252,6 +252,44 @@ void dump_syslog_record(syslog_record *record)
     D("");
 }
 
+syslog_record* syslog_alloc()
+{
+    syslog_record *x = malloc(sizeof(syslog_record));
+
+    if (x)
+        memset(x, 0, sizeof(syslog_record));
+
+    return x;
+}
+
+void syslog_destroy(syslog_record* record)
+{
+
+    if (record->timestamp)
+        free(record->timestamp);
+
+    if (record->hostname)
+        free(record->hostname);
+
+    if (record->appname)
+        free(record->appname);
+
+    if (record->procid)
+        free(record->procid);
+
+    if (record->msgid)
+        free(record->msgid);
+
+    //TOOD: define structured-data struct
+    if (record->sd)
+        free(record->sd);
+
+    if (record->msg)
+        free(record->msg);
+
+    free(record);
+
+}
 #ifdef SYSLOG_TEST
 int main()
 {

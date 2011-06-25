@@ -23,6 +23,9 @@
 #ifndef __SYSLOG_H__
 #define __SYSLOG_H__
 
+/**
+ * Syslog Structure.
+ */
 struct syslog_record {
     char facility;
     char severity;
@@ -42,6 +45,19 @@ struct syslog_record {
 
 typedef struct syslog_record syslog_record;
 
+/**
+ * Syslog Parser.
+ */
 int syslog_parse(char*, int, syslog_record *);
+
+/**
+ * Allocate helper.
+ */
+syslog_record* syslog_alloc();
+
+/**
+ * Deallocate helper.
+ */
+void syslog_destroy(syslog_record*);
 
 #endif
