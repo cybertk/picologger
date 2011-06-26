@@ -225,6 +225,8 @@ public abstract class Log
      */
     final private static String DEFAULT_HOSTNAME = "picologger_server";
     
+    private static final String TAG = "picologger";
+    
     /**
      * Host name.
      */
@@ -247,7 +249,10 @@ public abstract class Log
         sWritters = new Vector();
         try
         {
-            sWritters.addElement(new FileWritter("file:///SDCard/picologger/"));
+            final ISyslogWritter writter;
+            
+            writter = new FileWritter("file:///SDCard/picologger/");
+            addWritter(writter);
         }
         catch (Exception e)
         {
@@ -258,24 +263,39 @@ public abstract class Log
         sForwarder = new LogForwarder(sQueue, sWritters);
         sForwarder.start();
         
-        // Start a dedicated thread;
+        // Start a dedicated thread
         new Thread(new Runnable()
         {
             public void run()
             {
                 try
                 {
+                    final ISyslogWritter writter;
+                    
                     // Init udp writter, this is a blocking call.
-                    sWritters.addElement(new UdpWritter("10.60.5.62", 10505));
+                    writter = new UdpWritter("10.60.5.62", 10505);
+                    addWritter(writter);
                 }
                 catch (Exception e)
                 {
-                    System.out.println("failed to init udp writter.");
+                    System.out.println("failed to init udp writter, " + e);
                 }
                 
                 sHostname = getHostname();
             }
         }).start();
+    }
+    
+    /**
+     * Add a output receiver.
+     * 
+     * @param writter
+     * @return true if the operation is succeed.
+     */
+    synchronized public static void addWritter(ISyslogWritter writter)
+    {
+        sWritters.addElement(writter);
+        i(TAG, "Writter added, " + writter);
     }
     
     /**
@@ -436,17 +456,17 @@ public abstract class Log
         
         private FileConnection mLogFileConn;
         
+        private String mFileName;
+        
         public FileWritter(String path) throws IOException
         {
             
-            final String fileName;
-            
-            fileName = getLogPath(path);
-            if (null == fileName)
+            mFileName = getLogPath(path);
+            if (null == mFileName)
             {
                 throw new IOException("Something wrong with path " + path);
             }
-            mLogFileConn = (FileConnection) Connector.open(fileName,
+            mLogFileConn = (FileConnection) Connector.open(mFileName,
                     Connector.READ_WRITE);
             
             if (mLogFileConn != null && !mLogFileConn.exists())
@@ -525,7 +545,6 @@ public abstract class Log
         
         public void flush()
         {
-            
             try
             {
                 mLogFileConnOut.flush();
@@ -534,7 +553,11 @@ public abstract class Log
             {
                 // e.
             }
-            
+        }
+        
+        public String toString()
+        {
+            return "FileWritter: " + mFileName;
         }
     }
     
@@ -615,6 +638,11 @@ public abstract class Log
         public void flush()
         {
             // Cannot flush
+        }
+        
+        public String toString()
+        {
+            return "UdpWritter: " + mServerAddress;
         }
     }
     
