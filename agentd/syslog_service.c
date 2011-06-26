@@ -206,7 +206,7 @@ static void notify_clients(char *from, char *buf, size_t sz)
 
     if (!r.hostname ||
             !strcmp(r.hostname, "picologger_server")) {
-        r.hostname = from;
+        strcpy(r.hostname, from);
 
         // TODO:
         //syslog = syslog_encode();
@@ -382,7 +382,7 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
 
                 if (!optarg) goto oops;
 
-                f->filter.hostname = strdup(optarg);
+                strcpy(f->filter.hostname, optarg);
 
                 //TODO: find duplicate
                 list_add_tail(filters, &f->list);
@@ -398,7 +398,7 @@ int cmd_fltr_func(struct client *client, int argc, char * const argv[])
 
                 if (!optarg) goto oops;
 
-                f->filter.procid = strdup(optarg);
+                strcpy(f->filter.procid, optarg);
 
                 //TODO: find duplicate
                 list_add_tail(filters, &f->list);

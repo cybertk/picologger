@@ -32,6 +32,7 @@
 #include "syslog.h"
 
 #define SP   ' '
+#define NILVALUE "-"
 
 
 /**
@@ -47,39 +48,47 @@ char* encode(syslog_record *record)
 /**
  * strtok() will cause SIGSEGV
  */
-char* parse_token(const char *s, char token, char** saved)
+char* parse_token(const char *s, char token, char* saved)
 {
     char *pos, *pos0;
 
     pos = (char *)s;
 
-    // Find token
-    pos0 = strchr(s, ' ');
-    if (!pos0) {
+    if (NULL == pos) {
+        saved = "-";
         return NULL;
     }
 
-    *saved = strndup(pos, pos0 - pos);
+    // Find token
+    pos0 = strchr(s, ' ');
+    if (!pos0) {
+        saved = "-";
+        return NULL;
+    }
+
+    /* TODO: validate the LENGTH */
+    strncpy(saved, pos, (size_t)(pos0 - pos));
 
     return ++pos0;
 }
 
-static int parse_rfc3164(const char* log, syslog_record *record)
+static int parse_rfc3164(const char* log, size_t sz, syslog_record *record)
 {
 
-    char *pos, *pos0;
+    char *pos, *pos0, *end;
 
     pos = (char *)log;
     pos0 = pos;
+    end = pos + sz;
 
     // Special case for no HEADER.
     if (*pos == ' ') {
 
-        record->msg = strdup(pos);
+        strncpy(record->msg, pos, end - pos);
         return 0;
     }
 
-    // Parse timestamp
+    // Parse timestamp, uncompatible with RFC5424.
     int tokens = 3;
     while (tokens) {
 
@@ -91,24 +100,24 @@ static int parse_rfc3164(const char* log, syslog_record *record)
         ++pos0;
         --tokens;
     }
-    record->timestamp = strndup(pos, pos0 - pos);
+    strncpy(record->timestamp, pos, pos0 - pos);
     pos = pos0;
 
     // Parse hostname
-    pos = parse_token(pos, SP, &record->hostname);
+    pos = parse_token(pos, SP, record->hostname);
 
     // Parse msg
-    record->msg = strdup(pos);
+    record->msg = strndup(pos, end - pos);
 }
 
-static int parse_rfc5424(const char* log, syslog_record *record)
+static int parse_rfc5424(const char* log, size_t sz, syslog_record *record)
 {
-    char *pos, *pos0;
+    char *pos, *pos0, *end;
 
     pos = (char *)log;
+    end = pos + sz;
 
-    // Parse version
-    record->version = atoi(pos);
+    // Skip version
     pos += 2;
 
     // Skip Header
@@ -126,20 +135,19 @@ static int parse_rfc5424(const char* log, syslog_record *record)
     }
 
     // Parse timestamp
-    pos = parse_token(pos, SP, &record->timestamp);
-    //record->timestamp = strtok(pos, " ");
+    pos = parse_token(pos, SP, record->timestamp);
 
     // Parse hostname
-    pos = parse_token(pos, SP, &record->hostname);
+    pos = parse_token(pos, SP, record->hostname);
 
     // Parse app-name
-    pos = parse_token(pos, SP, &record->appname);
+    pos = parse_token(pos, SP, record->appname);
 
     // Parse procid
-    pos = parse_token(pos, SP, &record->procid);
+    pos = parse_token(pos, SP, record->procid);
 
     // Parse msgid
-    pos = parse_token(pos, SP, &record->msgid);
+    pos = parse_token(pos, SP, record->msgid);
 
     // Parse sd
     if (*pos0 == '[') {
@@ -168,10 +176,10 @@ static int parse_rfc5424(const char* log, syslog_record *record)
 
         pos += 1;
         // TODO: BOM supports
-        record->msg = strdup(pos);
+        record->msg = strndup(pos, end - pos);
     } else {
 
-        record->msg = strdup("");
+        record->msg = "";
     }
 }
 /**
@@ -183,16 +191,17 @@ static int parse_rfc5424(const char* log, syslog_record *record)
  *
  * Returns -1 if error occurs
  */
-static int parse_line(const char* line, syslog_record *record)
+static int parse_line(const char* line, size_t sz, syslog_record *record)
 {
-    char *pos, *pos0;
+    char *pos, *pos0, *end;
 
     pos = (char *)line;
+    end = pos + sz;
 
     // Reset.
     memset(record, 0, sizeof(syslog_record));
 
-    // Validate syslog format
+    // Validate syslog format.
     pos0 = strchr(pos, '>');
     if (*pos != '<' || (pos0 - pos) > 4){
         D("malformed syslog record, cannot parse pri.");
@@ -201,25 +210,21 @@ static int parse_line(const char* line, syslog_record *record)
     ++pos;
 
     {
-        // Parse facility and severity
+        // Parse facility and severity.
         int pri = atoi(pos);
         record->facility  = pri >> 3;
         record->severity = pri & 0x7;
     }
     pos = pos0 + 1;
 
-    // Detect syslog version.
-    if (*pos == '1') {
+    // Parse syslog version.
+    record->version = *pos - '0';
 
-        record->bsd = 0;
-        return parse_rfc5424(pos, record);
+    if (record->version == SYSLOG_VERSION_RFC5424) {
+        return parse_rfc5424(pos, end - pos, record);
     } else {
-
-        record->bsd = 1;
-        return parse_rfc3164(pos, record);
+        return parse_rfc3164(pos, end - pos, record);
     }
-
-    return 0;
 }
 
 /**
@@ -227,22 +232,20 @@ static int parse_line(const char* line, syslog_record *record)
  *
  * Returns -1 if error occurs
  */
-int syslog_parse(char *data, int sz, syslog_record *record)
+int syslog_parse(char *data, size_t sz, syslog_record *record)
 {
     // TODO: support 1-line.
-    data[sz] = 0;
-    return parse_line(data, record);
+    return parse_line(data, sz, record);
 }
 
 void syslog_dump(syslog_record *record)
 {
     D("Facility: %d", record->facility);
     D("severity: %d", record->severity);
-    if (!record->bsd)
-        D("Version: %d", record->version);
+    D("Version: %d", record->version);
     D("Timestamp: %s", record->timestamp);
     D("Hostname: %s", record->hostname);
-    if (!record->bsd) {
+    if (SYSLOG_VERSION_RFC5424 == record->version) {
         D("App-name: %s", record->appname);
         D("Procid: %s", record->procid);
         D("Msgid: %s", record->msgid);
@@ -265,22 +268,6 @@ syslog_record* syslog_alloc()
 void syslog_destroy(syslog_record* record)
 {
 
-    if (record->timestamp)
-        free(record->timestamp);
-
-    if (record->hostname)
-        free(record->hostname);
-
-    if (record->appname)
-        free(record->appname);
-
-    if (record->procid)
-        free(record->procid);
-
-    if (record->msgid)
-        free(record->msgid);
-
-    //TOOD: define structured-data struct
     if (record->sd)
         free(record->sd);
 
@@ -288,8 +275,8 @@ void syslog_destroy(syslog_record* record)
         free(record->msg);
 
     free(record);
-
 }
+
 #ifdef SYSLOG_TEST
 int main()
 {
@@ -301,15 +288,15 @@ int main()
     char *log_without_msg = "<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - -";
 
     printf("== Nomral Log ==\n");
-    parse_line(log, &r);
-    dump_syslog_record(&r);
+    parse_line(log, strlen(log), &r);
+    syslog_dump(&r);
 
     printf("== Log with two SDs ==\n");
-    parse_line(log_with_sds, &r);
-    dump_syslog_record(&r);
+    parse_line(log_with_sds, strlen(log_with_sds), &r);
+    syslog_dump(&r);
 
     printf("== Log without both SD and Message ==\n");
-    parse_line(log_without_msg, &r);
-    dump_syslog_record(&r);
+    parse_line(log_without_msg, strlen(log_without_msg), &r);
+    syslog_dump(&r);
 }
 #endif

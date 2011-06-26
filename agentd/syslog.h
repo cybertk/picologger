@@ -29,15 +29,51 @@
 struct syslog_record {
     char facility;
     char severity;
+
+#define SYSLOG_VERSION_RFC5424  1
+#define SYSLOG_VERSION_RFC3164  0
     char version;
-    char *timestamp;
-    char *hostname;
-    char *appname;
-    char *procid;
-    char *msgid;
+/**
+ * @see RFC5424 section-6.2.6
+ *
+ * HOSTNAME        = NILVALUE / 1*255PRINTUSASCII
+ *
+ * APP-NAME        = NILVALUE / 1*48PRINTUSASCII
+ * PROCID          = NILVALUE / 1*128PRINTUSASCII
+ * MSGID           = NILVALUE / 1*32PRINTUSASCII
+ *
+ * TIMESTAMP       = NILVALUE / FULL-DATE "T" FULL-TIME
+ * FULL-DATE       = DATE-FULLYEAR "-" DATE-MONTH "-" DATE-MDAY
+ * DATE-FULLYEAR   = 4DIGIT
+ * DATE-MONTH      = 2DIGIT  ; 01-12
+ * DATE-MDAY       = 2DIGIT  ; 01-28, 01-29, 01-30, 01-31 based on
+ *                           ; month/year
+ * FULL-TIME       = PARTIAL-TIME TIME-OFFSET
+ * PARTIAL-TIME    = TIME-HOUR ":" TIME-MINUTE ":" TIME-SECOND
+ *                   [TIME-SECFRAC]
+ * TIME-HOUR       = 2DIGIT  ; 00-23
+ * TIME-MINUTE     = 2DIGIT  ; 00-59
+ * TIME-SECOND     = 2DIGIT  ; 00-59
+ * TIME-SECFRAC    = "." 1*6DIGIT
+ * TIME-OFFSET     = "Z" / TIME-NUMOFFSET
+ * TIME-NUMOFFSET  = ("+" / "-") TIME-HOUR ":" TIME-MINUTE
+ */
+#define RFC5424_HOSTNAME_MAX_LEN  255
+#define RFC5424_APPNAME_MAX_LEN   48
+#define RFC5424_PROCID_MAX_LEN    128
+#define RFC5424_MSGID_MAX_LEN     32
+#define RFC5424_TIMESTAMP_MAX_LEN ((4+1+2+1+2)+1+(2+1+2+1+2+7+1+5))
+
+    // plus 1 because the string is null ended.
+    char timestamp[RFC5424_TIMESTAMP_MAX_LEN+1];
+    char hostname[RFC5424_HOSTNAME_MAX_LEN+1];
+    char appname[RFC5424_APPNAME_MAX_LEN+1];
+    char procid[RFC5424_PROCID_MAX_LEN+1];
+    char msgid[RFC5424_MSGID_MAX_LEN+1];
+
     //TOOD: define structured-data struct
     void *sd;
-    char *msg;
+    void *msg;
 
     // Indicates this is RFC3164 or RFC5424
     int bsd;
@@ -48,7 +84,7 @@ typedef struct syslog_record syslog_record;
 /**
  * Syslog Parser.
  */
-int syslog_parse(char*, int, syslog_record *);
+int syslog_parse(char*, size_t, syslog_record *);
 
 /**
  * Allocate helper.
